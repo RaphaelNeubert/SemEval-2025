@@ -1,18 +1,60 @@
 from collections import Counter
 from itertools import chain
 import torch
-#from model import PositionalEncoding
 import re
 import h5py
 import json
-import numpy as np
-from torch.utils.data import TensorDataset, DataLoader
+from torch.utils.data import DataLoader
 from torch.nn.utils.rnn import pad_sequence
 import random
 
 START_TOKEN = "<SOS>"
 END_TOKEN = "<EOS>"
-SPECIAL_TOKENS = ["<PAD>", "<UNK>"]     # special tokens get the first indices
+
+class Vocabulary:
+    # <PAD> token always gets index 0
+    def __init__(self, pad_token: str = "<PAD>", unk_token: str = "<UNK>"):
+        self.pad_token = pad_token
+        self.unk_token = unk_token
+        self.special_tokens = [pad_token, unk_token]
+        self.word_to_index = {token: idx for idx, token in enumerate(self.special_tokens)}
+        self.index_to_word = list(self.word_to_index.keys())
+
+    def build(self, data: list[list[str]], vocab_size: int):
+        words = chain.from_iterable(data)
+        counter = Counter(words).most_common(vocab_size)
+
+        self.word_to_index.update({word: idx + len(self.special_tokens) for idx, (word, _) in enumerate(counter)})
+        self.index_to_word = list(self.word_to_index.keys())
+
+    def words_to_indices(self, words: list[str]) -> list[int]:
+        return [self.word_to_index.get(word, self.word_to_index.get(self.unk_token)) for word in words]
+
+    def index_to_words(self, indices: list[int]) -> list[str]:
+        return [self.index_to_word[idx] for idx in indices]
+
+    def print_batch(self, batch: torch.Tensor):
+        for sample in batch:
+            indices = sample[~(sample==0)]  # remove padding
+            print(self.index_to_words(indices))
+
+    def save(self, path: str):
+        with open(path, 'w') as f:
+            json.dump({
+                "word_to_index": self.word_to_index,
+                "index_to_word": self.index_to_word
+            }, f)
+
+    @classmethod
+    def load(cls, path):
+        with open(path) as f:
+            data = json.load(f)
+        
+        vocab = cls()
+        vocab.word_to_index = data["word_to_index"]
+        vocab.index_to_word = data["index_to_word"]
+        return vocab
+
 
 def process_str(s: str) -> str:
     s = s.lower()
@@ -33,63 +75,34 @@ def load_data(datapath: str, shuffle=False) -> list[list[list[str],list[str]]]:
         random.shuffle(data)
     return data
 
-def generate_vocabs(data: list[list[list[str],list[str]]], vocab_size: int):
-    en_words = chain.from_iterable(pair[0] for pair in data)
-    ge_words = chain.from_iterable(pair[1] for pair in data)
-
-    en_counter = Counter(en_words).most_common(vocab_size)
-    ge_counter = Counter(ge_words).most_common(vocab_size)
-
-    en_word_to_index = {token: idx for idx, token in enumerate(SPECIAL_TOKENS)}
-    ge_word_to_index = {token: idx for idx, token in enumerate(SPECIAL_TOKENS)}
-
-    en_word_to_index.update({word: idx + len(SPECIAL_TOKENS) for idx, (word, _) in enumerate(en_counter)})
-    ge_word_to_index.update({word: idx + len(SPECIAL_TOKENS) for idx, (word, _) in enumerate(ge_counter)})
-
-    en_index_to_word = list(en_word_to_index.keys())
-    ge_index_to_word = list(ge_word_to_index.keys())
-
-    return en_word_to_index, en_index_to_word, ge_word_to_index, ge_index_to_word
-
-def words_to_indices(vocab: dict[str, int], words: list[str]) -> list[int]:
-    return [vocab.get(word, vocab.get("<UNK>")) for word in words]
-
-def indices_to_words(vocab: list[str], indices: list[int]) -> list[str]:
-    return [vocab[idx] for idx in indices]
-
-def generate_toks(datapath: str, vocab_size: int, save=False):
+def generate_tokens(datapath: str, vocab_size: int, save=False):
     data = load_data(datapath, shuffle=True)
     data = process_text(data)
 
-    (en_word_to_index, en_index_to_word, 
-     ge_word_to_index, ge_index_to_word) = generate_vocabs(data, vocab_size)
+    vocab_en = Vocabulary()
+    vocab_en.build([pair[0] for pair in data], vocab_size)
+    vocab_de = Vocabulary()
+    vocab_de.build([pair[1] for pair in data], vocab_size)
 
-    data_tok = [(np.array(words_to_indices(en_word_to_index, pair[0])), 
-                          np.array(words_to_indices(ge_word_to_index, pair[1]))) for pair in data]
+    data_tok = [(np.array(vocab_en.words_to_indices(pair[0])), 
+                          np.array(vocab_de.words_to_indices(pair[1]))) for pair in data]
     if save:
+        vocab_de.save("data/vocab_de.json")
+        vocab_en.save("data/vocab_en.json")
         with h5py.File('data/data.h5', 'w') as f:
             dt = h5py.vlen_dtype(np.dtype('int32'))
             f.create_dataset('data_tok', data=data_tok, dtype=dt)
-            f.create_dataset('en_word_to_index', data=json.dumps(en_word_to_index), dtype=h5py.string_dtype())
-            f.create_dataset('ge_word_to_index', data=json.dumps(ge_word_to_index), dtype=h5py.string_dtype())
-            f.create_dataset('en_index_to_word', data=en_index_to_word, dtype=h5py.string_dtype())
-            f.create_dataset('ge_index_to_word', data=ge_index_to_word, dtype=h5py.string_dtype())
-    return data_tok, (en_word_to_index, en_index_to_word, ge_word_to_index, ge_index_to_word)
+    return data_tok, vocab_en, vocab_de
 
-#data_tok, (en_word_to_index, en_index_to_word, ge_word_to_index, ge_index_to_word) = generate_toks("data/data.txt", 30000, save=True)
 
-def load_toks(db_path):
-    with h5py.File(db_path, 'r') as f:
+def load_tokens(data_path: str, vocab_en_path: str, vocab_de_path: str):
+    with h5py.File(data_path, 'r') as f:
         data_tok = f['data_tok'][:]
-        en_word_to_index = json.loads(f['en_word_to_index'][()])
-        ge_word_to_index = json.loads(f['ge_word_to_index'][()])
-        en_index_to_word = list(f['en_index_to_word'][()])
-        ge_index_to_word = list(f['ge_index_to_word'][()])
-    return data_tok, (en_word_to_index, en_index_to_word, ge_word_to_index, ge_index_to_word)
+    vocab_en = Vocabulary.load(vocab_en_path)
+    vocab_de = Vocabulary.load(vocab_de_path)
+    return data_tok, vocab_en, vocab_de
 
-data_tok, (en_word_to_index, en_index_to_word, ge_word_to_index, ge_index_to_word) = load_toks('data/data.h5')
-data_tok = [(torch.from_numpy(pair[0]), torch.from_numpy(pair[1])) for pair in data_tok]
-
+# used as a collate function for the DataLoader
 def prep_batch(batch):
     en_batch, ge_batch = zip(*batch)
     en_padded = pad_sequence(en_batch, batch_first=True, padding_value=0)  # corresponds to <PAD>
@@ -98,11 +111,16 @@ def prep_batch(batch):
     ge_mask = ~(ge_padded == 0)
     return ge_padded, ge_mask, en_padded, en_mask
 
-dl = DataLoader(data_tok, batch_size=2, collate_fn=prep_batch, shuffle=True)
+def get_data(from_disk=True, batch_size=64, eval_frac=0.2) -> (DataLoader, DataLoader, Vocabulary, Vocabulary):
+    if from_disk:
+        data_tok, vocab_en, vocab_de = load_tokens("data/data.h5", "data/vocab_en.json", "data/vocab_de.json")
+    else:
+        data_tok, vocab_en, vocab_de = generate_tokens("data/data.txt", 30000, save=True)
+    data_tok = [(torch.from_numpy(pair[0]), torch.from_numpy(pair[1])) for pair in data_tok]
 
-#print([indices_to_words(ge_index_to_word,sentence)for sentence in inputs])
-inputs, input_mask, targets, target_mask = next(iter(dl))
-print(inputs.shape)
-print(targets.shape)
-#print([indices_to_words(ge_index_to_word,sentence)for sentence in inputs])
-#print(indices_to_words(ge_index_to_word,x[1][0]))
+    train_high = int(len(data_tok)*(1-eval_frac))
+    trainloader = DataLoader(data_tok[:train_high], batch_size=batch_size, collate_fn=prep_batch, shuffle=True)
+    evalloader = DataLoader(data_tok[train_high:], batch_size=batch_size, collate_fn=prep_batch, shuffle=True)
+
+    return trainloader, evalloader, vocab_en, vocab_de
+
