@@ -50,6 +50,7 @@ class MultiHeadAttention(nn.Module):
         scores = torch.matmul(Q, K.transpose(-1,-2)) * self.scale
 
         if mask is not None:
+            mask = mask.unsqueeze(1).unsqueeze(-1)
             scores = scores.masked_fill(mask == 0, float('-inf'))
         if causal: # mask away information of future sequence elements (required for training)
             causal_mask = torch.triu(torch.full_like(scores, float("-inf"), device=Q.device), diagonal=1)
@@ -108,11 +109,11 @@ class DecoderLayer(nn.Module):
         self.norm2 = nn.LayerNorm(dim_embeddings)
         self.norm3 = nn.LayerNorm(dim_embeddings)
         
-    def forward(self, x, enc_output):
+    def forward(self, x, enc_output, mask=None):
         x_norm = self.norm1(x)
-        x = x + self.mha1(x_norm, x_norm, x_norm, causal=True)
+        x = x + self.mha1(x_norm, x_norm, x_norm, mask=mask, causal=True)
         enc_norm = self.norm2(enc_output)
-        x = x + self.mha2(self.norm2(x), enc_norm, enc_norm)
+        x = x + self.mha2(self.norm2(x), enc_norm, enc_norm, mask=mask)
         x = x + self.ffn(self.norm3(x))
         return x
 
@@ -121,19 +122,36 @@ class Decoder(nn.Module):
         super().__init__()
         self.dec_layers = nn.ModuleList([DecoderLayer(dim_embeddings, num_heads, hidden_dims)
                                          for _ in range(num_layers)])
-    def forward(self, x, enc_output):
+    def forward(self, tgt, enc_output, mask=None):
         for layer in self.dec_layers:
-            x = layer(x, enc_output)
-        return x
+            out = layer(tgt, enc_output, mask=mask)
+        return out
+    
+class Transformer(nn.Module):
+    def __init__(self, src_vocab_size, tgt_vocab_size, dim_embeddings, num_heads, ffn_hidden_dims, 
+                 num_encoder_layers, num_decoder_layers, max_seq_len=5000):
+        super().__init__()
+        self.dim_embeddings = dim_embeddings
+        self.tgt_vocab_size = tgt_vocab_size
+        self.src_embedding = nn.Embedding(src_vocab_size, dim_embeddings)
+        self.tgt_embedding = nn.Embedding(tgt_vocab_size, dim_embeddings)
+        self.positional_encoding = PositionalEncoding(dim_embeddings, max_seq_len)
+        self.encoder = Encoder(dim_embeddings, num_heads, ffn_hidden_dims, num_encoder_layers)
+        self.decoder = Decoder(dim_embeddings, num_heads, ffn_hidden_dims, num_encoder_layers)
+        self.fc = nn.Linear(dim_embeddings, tgt_vocab_size)
+        
+    def forward(self, src, tgt, src_mask=None, tgt_mask=None):
+        src = self.src_embedding(src)
+        src = self.positional_encoding(src)
+        enc_out = self.encoder(src, mask=src_mask)
 
-d_emb = 100 
-heads = 5
-hidden_dim = d_emb*4
-num_layers = 4
-enc = Encoder(d_emb, heads, hidden_dim, num_layers).to("cuda")
-dec = Decoder(d_emb, heads, hidden_dim, num_layers).to("cuda")
-x = torch.randn(64, 100, d_emb, device="cuda")
-enc_out = enc(x)
-dec_out = dec(x, enc_out)
-print(enc_out.shape)
-print(dec_out.shape)
+        tgt_seq_len = tgt.shape[1]
+        tgt = self.tgt_embedding(tgt)
+        tgt = self.positional_encoding(tgt)
+        out = self.decoder(tgt, enc_out, mask=tgt_mask)
+        out = self.fc(out.view(-1, self.dim_embeddings))
+        out = out.view(-1, tgt_seq_len, self.tgt_vocab_size)
+        out = F.softmax(out, dim=-1)
+        print(out.shape)
+        return out
+

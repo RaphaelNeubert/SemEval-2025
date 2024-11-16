@@ -33,11 +33,6 @@ class Vocabulary:
     def index_to_words(self, indices: list[int]) -> list[str]:
         return [self.index_to_word[idx] for idx in indices]
 
-    def print_batch(self, batch: torch.Tensor):
-        for sample in batch:
-            indices = sample[~(sample==0)]  # remove padding
-            print(self.index_to_words(indices))
-
     def save(self, path: str):
         with open(path, 'w') as f:
             json.dump({
@@ -54,6 +49,14 @@ class Vocabulary:
         vocab.word_to_index = data["word_to_index"]
         vocab.index_to_word = data["index_to_word"]
         return vocab
+
+    def size(self):
+        return len(self.index_to_word)
+
+    def print_batch(self, batch: torch.Tensor):
+        for sample in batch:
+            indices = sample[~(sample==0)]  # remove padding
+            print(self.index_to_words(indices))
 
 
 def process_str(s: str) -> str:
