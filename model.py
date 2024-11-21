@@ -3,8 +3,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 class PositionalEncoding(nn.Module):
-    def __init__(self, dim_embeddings, max_len=5000):
+    def __init__(self, dim_embeddings, max_len=5000, dropout=0):
         super().__init__()
+        self.dropout = nn.Dropout(dropout)
         pos = torch.arange(max_len)
         # apply log rule to original formula for computational speedup
         div = torch.exp(-torch.arange(0, dim_embeddings, 2) / dim_embeddings * torch.log(torch.tensor(10000)))
@@ -18,7 +19,8 @@ class PositionalEncoding(nn.Module):
     # expected shape: (batch_size, sequence_length, d_model)
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         assert x.ndim == 3
-        return x + self.pos_enc[:x.shape[1],:].expand(x.shape[0], -1, -1)
+        x = x + self.pos_enc[:x.shape[1],:].expand(x.shape[0], -1, -1)
+        return self.dropout(x)
 
 
 class MultiHeadAttention(nn.Module):
@@ -34,10 +36,10 @@ class MultiHeadAttention(nn.Module):
         self.num_heads = num_heads
         self.dim_head = dim_embeddings // num_heads
         # avoid small gradients in softmax caused by large dot products when calculating the scores
-        self.scale = 1 / (dim_embeddings ** 0.5) 
+        self.scale = 1 / (self.dim_head ** 0.5) 
 
     # expected shape of Q, K, V: (batch_size, seq_len, dim_embeddings)
-    # expected shape of mask: (batch_size, seq_len)
+    # expected shape of mask: (batch_size, seq_len_key)
     def forward(self, Q, K, V, mask=None, causal=False):
         in_shape = Q.shape
         Q = self.Q_linear(Q)
@@ -48,9 +50,10 @@ class MultiHeadAttention(nn.Module):
         K = K.view(K.shape[0], K.shape[1], self.num_heads, self.dim_head).transpose(1,2)
         V = V.view(V.shape[0], V.shape[1], self.num_heads, self.dim_head).transpose(1,2)
         scores = torch.matmul(Q, K.transpose(-1,-2)) * self.scale
+        # scores.shape: (batch_size, num_heads, seq_len_query, seq_len_key)
 
         if mask is not None:
-            mask = mask.unsqueeze(1).unsqueeze(-1)
+            mask = mask.unsqueeze(1).unsqueeze(1)
             scores = scores.masked_fill(mask == 0, float('-inf'))
         if causal: # mask away information of future sequence elements (required for training)
             causal_mask = torch.triu(torch.full_like(scores, float("-inf"), device=Q.device), diagonal=1)
@@ -109,11 +112,11 @@ class DecoderLayer(nn.Module):
         self.norm2 = nn.LayerNorm(dim_embeddings)
         self.norm3 = nn.LayerNorm(dim_embeddings)
         
-    def forward(self, x, enc_output, mask=None):
+    def forward(self, x, enc_output, src_mask=None, tgt_mask=None):
         x_norm = self.norm1(x)
-        x = x + self.mha1(x_norm, x_norm, x_norm, mask=mask, causal=True)
+        x = x + self.mha1(x_norm, x_norm, x_norm, mask=tgt_mask, causal=True)
         enc_norm = self.norm2(enc_output)
-        x = x + self.mha2(self.norm2(x), enc_norm, enc_norm, mask=mask)
+        x = x + self.mha2(self.norm2(x), enc_norm, enc_norm, mask=src_mask)
         x = x + self.ffn(self.norm3(x))
         return x
 
@@ -122,22 +125,22 @@ class Decoder(nn.Module):
         super().__init__()
         self.dec_layers = nn.ModuleList([DecoderLayer(dim_embeddings, num_heads, hidden_dims)
                                          for _ in range(num_layers)])
-    def forward(self, tgt, enc_output, mask=None):
+    def forward(self, tgt, enc_output, src_mask=None, tgt_mask=None):
         for layer in self.dec_layers:
-            out = layer(tgt, enc_output, mask=mask)
+            out = layer(tgt, enc_output, src_mask, tgt_mask)
         return out
     
 class Transformer(nn.Module):
     def __init__(self, src_vocab_size, tgt_vocab_size, dim_embeddings, num_heads, ffn_hidden_dims, 
-                 num_encoder_layers, num_decoder_layers, max_seq_len=5000):
+                 num_encoder_layers, num_decoder_layers, max_seq_len=5000, dropout=0):
         super().__init__()
         self.dim_embeddings = dim_embeddings
         self.tgt_vocab_size = tgt_vocab_size
         self.src_embedding = nn.Embedding(src_vocab_size, dim_embeddings)
         self.tgt_embedding = nn.Embedding(tgt_vocab_size, dim_embeddings)
-        self.positional_encoding = PositionalEncoding(dim_embeddings, max_seq_len)
+        self.positional_encoding = PositionalEncoding(dim_embeddings, max_seq_len, dropout)
         self.encoder = Encoder(dim_embeddings, num_heads, ffn_hidden_dims, num_encoder_layers)
-        self.decoder = Decoder(dim_embeddings, num_heads, ffn_hidden_dims, num_encoder_layers)
+        self.decoder = Decoder(dim_embeddings, num_heads, ffn_hidden_dims, num_decoder_layers)
         self.fc = nn.Linear(dim_embeddings, tgt_vocab_size)
         
     def forward(self, src, tgt, src_mask=None, tgt_mask=None):
@@ -148,10 +151,34 @@ class Transformer(nn.Module):
         tgt_seq_len = tgt.shape[1]
         tgt = self.tgt_embedding(tgt)
         tgt = self.positional_encoding(tgt)
-        out = self.decoder(tgt, enc_out, mask=tgt_mask)
+        out = self.decoder(tgt, enc_out, src_mask, tgt_mask)
         out = self.fc(out.view(-1, self.dim_embeddings))
         out = out.view(-1, tgt_seq_len, self.tgt_vocab_size)
-        out = F.softmax(out, dim=-1)
-        print(out.shape)
+        #out = F.softmax(out, dim=-1)
         return out
+
+    def inference(self, src, start_index, end_index, src_mask=None, max_len=1000, temperature=0):
+        src = self.src_embedding(src)
+        src = self.positional_encoding(src)
+        enc_out = self.encoder(src, mask=src_mask)
+
+        tgt_indices = torch.tensor([[start_index]], dtype=torch.long, device=src.device)
+
+        for _ in range(max_len-1):
+            tgt = self.tgt_embedding(tgt_indices)
+            tgt = self.positional_encoding(tgt)
+
+            out = self.decoder(tgt, enc_out, src_mask=src_mask)
+            out = self.fc(out[:, -1, :])
+            if temperature == 0:
+                next_token = torch.argmax(out, dim=-1).item()
+            else:
+                probabilities = torch.softmax(out/temperature, dim=-1)
+                next_token = torch.multinomial(probabilities, num_samples=1).item()
+
+            tgt_indices = torch.cat((tgt_indices, torch.tensor([[next_token]], device=src.device)), dim=1)
+            if next_token == end_index:
+                break
+
+        return tgt_indices
 

@@ -114,16 +114,18 @@ def prep_batch(batch):
     ge_mask = ~(ge_padded == 0)
     return ge_padded, ge_mask, en_padded, en_mask
 
-def get_data(from_disk=True, batch_size=64, eval_frac=0.2) -> (DataLoader, DataLoader, Vocabulary, Vocabulary):
+def get_data(from_disk=True, batch_size=64, eval_frac=0.1, test_frac=0.05) -> (DataLoader, DataLoader, Vocabulary, Vocabulary):
     if from_disk:
         data_tok, vocab_en, vocab_de = load_tokens("data/data.h5", "data/vocab_en.json", "data/vocab_de.json")
     else:
         data_tok, vocab_en, vocab_de = generate_tokens("data/data.txt", 30000, save=True)
     data_tok = [(torch.from_numpy(pair[0]), torch.from_numpy(pair[1])) for pair in data_tok]
 
-    train_high = int(len(data_tok)*(1-eval_frac))
+    train_high = int(len(data_tok)*(1-eval_frac-test_frac))
+    eval_high = train_high + int(len(data_tok)*eval_frac)
     trainloader = DataLoader(data_tok[:train_high], batch_size=batch_size, collate_fn=prep_batch, shuffle=True)
-    evalloader = DataLoader(data_tok[train_high:], batch_size=batch_size, collate_fn=prep_batch, shuffle=True)
+    evalloader = DataLoader(data_tok[train_high:eval_high], batch_size=256, collate_fn=prep_batch, shuffle=True)
+    testloader = DataLoader(data_tok[eval_high:], batch_size=10, collate_fn=prep_batch, shuffle=True)
 
-    return trainloader, evalloader, vocab_en, vocab_de
+    return trainloader, evalloader, testloader, vocab_en, vocab_de
 
