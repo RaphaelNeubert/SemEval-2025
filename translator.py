@@ -84,45 +84,46 @@ if __name__ == "__main__":
         model.load_state_dict(torch.load(LOAD_WEIGHTS_FROM, weights_only=True))
 
     opt = torch.optim.Adam(model.parameters())
-    print("test")
-    src = "Ich habe gewonnen ! .".split(" ")
-    start_idx = vocab_en.words_to_indices(["<SOS>"])[0]
-    end_idx = vocab_en.words_to_indices(["<EOS>"])[0]
-    src_indices = torch.tensor(vocab_de.words_to_indices(src), dtype=torch.long, device=device).unsqueeze(0)
-    tgt_indices = model.inference(src_indices, start_idx, end_idx, max_len=200)
-    print(tgt_indices.shape)
-    print(" ".join(vocab_en.index_to_words(tgt_indices.squeeze())))
 
-#    steps = 0
-#    loss_accu = 0
-#    for epoch in range(1000):
-#        for inputs, input_mask, targets, target_mask in tqdm(trainloader):
-#            inputs, input_mask  = inputs.to(device), input_mask.to(device)
-#            targets, target_mask = targets.to(device), target_mask.to(device)
-#            opt.zero_grad()
-#
-#            pred = model(inputs, targets[:,:-1], src_mask=input_mask, tgt_mask=target_mask[:,:-1])
-#            loss = torch.nn.CrossEntropyLoss()(pred.view(-1,pred.shape[-1]), targets[:,1:].reshape(-1).to(torch.long))
-#            #loss = F.cross_entropy(pred, targets[:,1:].to(torch.long))
-#            loss_accu += loss.item()
-#            loss.backward()
-#            opt.step()
-#
-#            if (steps+1)%100 == 0:
-#                tqdm.write(f"train_loss: {loss_accu/100}")
-#                writer.add_scalar("training/loss", loss_accu/100, global_step=steps)
-#                loss_accu = 0 
-#
-#            if steps%200 == 0:
-#                eval_loss, eval_acc = evaluate(model, evalloader)
-#                tqdm.write(f"eval_loss: {eval_loss}, acc: {eval_acc}")
-#                writer.add_scalar("evaluation/loss", eval_loss, global_step=steps)
-#                writer.add_scalar("evaluation/accuracy", eval_acc, global_step=steps)
-#
-#            if steps%500 == 0:
-#                test_translations(steps, model, testloader, vocab_de, vocab_en, writer=writer)
-#                if SAVE_WEIGHTS:
-#                    torch.save(model.state_dict(), SAVE_WEIGHTS_TO)
-#
-#            steps += 1
-#
+    #print("test")
+    #src = "Ich habe gewonnen ! .".split(" ")
+    #start_idx = vocab_en.words_to_indices(["<SOS>"])[0]
+    #end_idx = vocab_en.words_to_indices(["<EOS>"])[0]
+    #src_indices = torch.tensor(vocab_de.words_to_indices(src), dtype=torch.long, device=device).unsqueeze(0)
+    #tgt_indices = model.inference(src_indices, start_idx, end_idx, max_len=200)
+    #print(tgt_indices.shape)
+    #print(" ".join(vocab_en.index_to_words(tgt_indices.squeeze())))
+
+    steps = 0
+    loss_accu = 0
+    for epoch in range(1000):
+        for inputs, input_mask, targets, target_mask in tqdm(trainloader):
+            inputs, input_mask  = inputs.to(device), input_mask.to(device)
+            targets, target_mask = targets.to(device), target_mask.to(device)
+            opt.zero_grad()
+
+            pred = model(inputs, targets[:,:-1], src_mask=input_mask, tgt_mask=target_mask[:,:-1])
+            loss = torch.nn.CrossEntropyLoss()(pred.view(-1,pred.shape[-1]), targets[:,1:].reshape(-1).to(torch.long))
+            #loss = F.cross_entropy(pred, targets[:,1:].to(torch.long))
+            loss_accu += loss.item()
+            loss.backward()
+            opt.step()
+
+            if (steps+1)%100 == 0:
+                tqdm.write(f"train_loss: {loss_accu/100}")
+                writer.add_scalar("training/loss", loss_accu/100, global_step=steps)
+                loss_accu = 0 
+
+            if steps%200 == 0:
+                eval_loss, eval_acc = evaluate(model, evalloader)
+                tqdm.write(f"eval_loss: {eval_loss}, acc: {eval_acc}")
+                writer.add_scalar("evaluation/loss", eval_loss, global_step=steps)
+                writer.add_scalar("evaluation/accuracy", eval_acc, global_step=steps)
+
+            if steps%500 == 0:
+                test_translations(steps, model, testloader, vocab_de, vocab_en, writer=writer)
+                if SAVE_WEIGHTS:
+                    torch.save(model.state_dict(), SAVE_WEIGHTS_TO)
+
+            steps += 1
+

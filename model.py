@@ -24,7 +24,7 @@ class PositionalEncoding(nn.Module):
 
 
 class MultiHeadAttention(nn.Module):
-    def __init__(self, dim_embeddings, num_heads):
+    def __init__(self, dim_embeddings, num_heads, dropout=0):
         super().__init__()
         assert dim_embeddings % num_heads == 0
 
@@ -37,6 +37,8 @@ class MultiHeadAttention(nn.Module):
         self.dim_head = dim_embeddings // num_heads
         # avoid small gradients in softmax caused by large dot products when calculating the scores
         self.scale = 1 / (self.dim_head ** 0.5) 
+
+        self.dropout = nn.Dropout(dropout)
 
     # expected shape of Q, K, V: (batch_size, seq_len, dim_embeddings)
     # expected shape of mask: (batch_size, seq_len_key)
@@ -63,25 +65,27 @@ class MultiHeadAttention(nn.Module):
         out = torch.matmul(attention_weights, V)
         out = out.transpose(1,2).contiguous().view(in_shape)
         out = self.O_linear(out)
-        return out
+        return self.dropout(out)
 
 
 class FeedForwardNetwork(nn.Module):
-    def __init__(self, dim_embeddings, hidden_dims):
+    def __init__(self, dim_embeddings, hidden_dims, dropout=0):
         super().__init__()
         self.fc1 = nn.Linear(dim_embeddings, hidden_dims)
         self.fc2 = nn.Linear(hidden_dims, dim_embeddings)
+        self.dropout = nn.Dropout(dropout)
 
     def forward(self, x):
         x = F.relu(self.fc1(x))
-        return self.fc2(x)
+        x = self.fc2(x)
+        return self.dropout(x)
 
 
 class EncoderLayer(nn.Module):
-    def __init__(self, dim_embeddings, num_heads, hidden_dims):
+    def __init__(self, dim_embeddings, num_heads, hidden_dims, dropout=0):
         super().__init__()
-        self.mha = MultiHeadAttention(dim_embeddings, num_heads)
-        self.ffn = FeedForwardNetwork(dim_embeddings, hidden_dims)
+        self.mha = MultiHeadAttention(dim_embeddings, num_heads, dropout=dropout)
+        self.ffn = FeedForwardNetwork(dim_embeddings, hidden_dims, dropout=dropout)
         self.norm1 = nn.LayerNorm(dim_embeddings)
         self.norm2 = nn.LayerNorm(dim_embeddings)
         
@@ -92,9 +96,9 @@ class EncoderLayer(nn.Module):
         return x
 
 class Encoder(nn.Module):
-    def __init__(self, dim_embeddings, num_heads, hidden_dims, num_layers):
+    def __init__(self, dim_embeddings, num_heads, hidden_dims, num_layers, dropout=0):
         super().__init__()
-        self.enc_layers = nn.ModuleList([EncoderLayer(dim_embeddings, num_heads, hidden_dims)
+        self.enc_layers = nn.ModuleList([EncoderLayer(dim_embeddings, num_heads, hidden_dims, dropout)
                                          for _ in range(num_layers)])
 
     def forward(self, x, mask=None):
@@ -103,11 +107,11 @@ class Encoder(nn.Module):
         return x
 
 class DecoderLayer(nn.Module):
-    def __init__(self, dim_embeddings, num_heads, hidden_dims):
+    def __init__(self, dim_embeddings, num_heads, hidden_dims, dropout=0):
         super().__init__()
-        self.mha1 = MultiHeadAttention(dim_embeddings, num_heads)
-        self.mha2 = MultiHeadAttention(dim_embeddings, num_heads)
-        self.ffn = FeedForwardNetwork(dim_embeddings, hidden_dims)
+        self.mha1 = MultiHeadAttention(dim_embeddings, num_heads, dropout=dropout)
+        self.mha2 = MultiHeadAttention(dim_embeddings, num_heads, dropout=dropout)
+        self.ffn = FeedForwardNetwork(dim_embeddings, hidden_dims, dropout=dropout)
         self.norm1 = nn.LayerNorm(dim_embeddings)
         self.norm2 = nn.LayerNorm(dim_embeddings)
         self.norm3 = nn.LayerNorm(dim_embeddings)
@@ -121,9 +125,9 @@ class DecoderLayer(nn.Module):
         return x
 
 class Decoder(nn.Module):
-    def __init__(self, dim_embeddings, num_heads, hidden_dims, num_layers):
+    def __init__(self, dim_embeddings, num_heads, hidden_dims, num_layers, dropout=0):
         super().__init__()
-        self.dec_layers = nn.ModuleList([DecoderLayer(dim_embeddings, num_heads, hidden_dims)
+        self.dec_layers = nn.ModuleList([DecoderLayer(dim_embeddings, num_heads, hidden_dims, dropout=dropout)
                                          for _ in range(num_layers)])
     def forward(self, tgt, enc_output, src_mask=None, tgt_mask=None):
         for layer in self.dec_layers:
@@ -139,8 +143,8 @@ class Transformer(nn.Module):
         self.src_embedding = nn.Embedding(src_vocab_size, dim_embeddings)
         self.tgt_embedding = nn.Embedding(tgt_vocab_size, dim_embeddings)
         self.positional_encoding = PositionalEncoding(dim_embeddings, max_seq_len, dropout)
-        self.encoder = Encoder(dim_embeddings, num_heads, ffn_hidden_dims, num_encoder_layers)
-        self.decoder = Decoder(dim_embeddings, num_heads, ffn_hidden_dims, num_decoder_layers)
+        self.encoder = Encoder(dim_embeddings, num_heads, ffn_hidden_dims, num_encoder_layers, dropout)
+        self.decoder = Decoder(dim_embeddings, num_heads, ffn_hidden_dims, num_decoder_layers, dropout)
         self.fc = nn.Linear(dim_embeddings, tgt_vocab_size)
         
     def forward(self, src, tgt, src_mask=None, tgt_mask=None):
