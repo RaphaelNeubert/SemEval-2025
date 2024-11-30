@@ -1,18 +1,6 @@
 import torch
 import torch.nn.functional as F
-from data import get_data
-from model import Transformer, SemModel
 from tqdm import tqdm
-
-torch.set_printoptions(profile="full")
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
-from torch.utils.tensorboard import SummaryWriter
-
-SAVE_WEIGHTS = True
-SAVE_WEIGHTS_TO = "data/weights1.pth"
-LOAD_WEIGHTS = False
-LOAD_WEIGHTS_FROM = "data/weights1.pth"
 
 def evaluate(model, dataloader):
     model.eval()
@@ -36,19 +24,7 @@ def evaluate(model, dataloader):
     model.train()
     return eval_loss, acc
 
-if __name__ == "__main__":
-    writer = SummaryWriter()
-    trainloader, evalloader, testloader, vocab = get_data(batch_size=64)
-
-    model = SemModel(vocab_size=vocab.size(), num_classes=5, dim_embeddings=512, 
-                     num_heads=8, ffn_hidden_dims=512*4, num_encoder_layers=6, dropout=0.1).to(device)
-
-
-    if LOAD_WEIGHTS:
-        model.load_state_dict(torch.load(LOAD_WEIGHTS_FROM, weights_only=True))
-
-    opt = torch.optim.Adam(model.parameters())
-
+def training(model):
     steps = 0
     loss_accu = 0
     for epoch in range(1):
@@ -78,4 +54,3 @@ if __name__ == "__main__":
                     torch.save(model.state_dict(), SAVE_WEIGHTS_TO)
 
             steps += 1
-
