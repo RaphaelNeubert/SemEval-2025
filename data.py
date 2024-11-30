@@ -1,15 +1,11 @@
-from collections import Counter
-from itertools import chain
-import torch
+
+import random
 import re
-import h5py
-import json
+from itertools import chain
+from collections import Counter
 from torch.utils.data import DataLoader
 from torch.nn.utils.rnn import pad_sequence
-import random
-
-START_TOKEN = "<SOS>"
-END_TOKEN = "<EOS>"
+import torch
 
 class Vocabulary:
     # <PAD> token always gets index 0
@@ -22,7 +18,7 @@ class Vocabulary:
 
     def build(self, data: list[list[str]], vocab_size: int):
         words = chain.from_iterable(data)
-        counter = Counter(words).most_common(vocab_size)
+        counter = Counter(words).most_common(vocab_size-2)
 
         self.word_to_index.update({word: idx + len(self.special_tokens) for idx, (word, _) in enumerate(counter)})
         self.index_to_word = list(self.word_to_index.keys())
@@ -58,74 +54,48 @@ class Vocabulary:
             indices = sample[~(sample==0)]  # remove padding
             print(self.index_to_words(indices))
 
-
-def process_str(s: str) -> str:
-    s = s.lower()
-    s = re.sub(r'([.,!?()"\'])', r' \1 ', s) # add whitespace around punctuation
-    return s
-
-def process_text(text: list[list[str,str]]) -> list[list[list[str],list[str]]]:
-    for pair in text:
-        pair[0] = f"{START_TOKEN} {process_str(pair[0])} {END_TOKEN}".split()
-        pair[1] = f"{START_TOKEN} {process_str(pair[1])} {END_TOKEN}".split()
-    return text
-
-def load_data(datapath: str, shuffle=False) -> list[list[list[str],list[str]]]:
+def load_data(datapath: str) -> list[list[str, list[int]]]:
     with open(datapath) as f:
+        f.readline() # ignore first line 
         data = f.readlines()
-    data = [l.split('\t')[:2] for l in data]
-    if shuffle:
-        random.shuffle(data)
+    data = [[l.split('\t')[1], list(map(int, l[:-1].split('\t')[2:]))] for l in data]
     return data
 
-def generate_tokens(datapath: str, vocab_size: int, save=False):
-    data = load_data(datapath, shuffle=True)
-    data = process_text(data)
 
-    vocab_en = Vocabulary()
-    vocab_en.build([pair[0] for pair in data], vocab_size)
-    vocab_de = Vocabulary()
-    vocab_de.build([pair[1] for pair in data], vocab_size)
+def process_text(data: list[list[str, list[int]]]) -> list[list[list[str], list[int]]]:
+    for d in data:
+        d[0] = d[0].lower()
+        d[0] = re.sub(r'([.,!?()"\'])', r' \1 ', d[0]) # add whitespace around punctuation
+        d[0] = d[0].split()
+    return data
 
-    data_tok = [(np.array(vocab_en.words_to_indices(pair[0])), 
-                          np.array(vocab_de.words_to_indices(pair[1]))) for pair in data]
-    if save:
-        vocab_de.save("data/vocab_de.json")
-        vocab_en.save("data/vocab_en.json")
-        with h5py.File('data/data.h5', 'w') as f:
-            dt = h5py.vlen_dtype(np.dtype('int32'))
-            f.create_dataset('data_tok', data=data_tok, dtype=dt)
-    return data_tok, vocab_en, vocab_de
-
-
-def load_tokens(data_path: str, vocab_en_path: str, vocab_de_path: str):
-    with h5py.File(data_path, 'r') as f:
-        data_tok = f['data_tok'][:]
-    vocab_en = Vocabulary.load(vocab_en_path)
-    vocab_de = Vocabulary.load(vocab_de_path)
-    return data_tok, vocab_en, vocab_de
-
-# used as a collate function for the DataLoader
 def prep_batch(batch):
-    en_batch, ge_batch = zip(*batch)
-    en_padded = pad_sequence(en_batch, batch_first=True, padding_value=0)  # corresponds to <PAD>
-    en_mask = ~(en_padded == 0)
-    ge_padded = pad_sequence(ge_batch, batch_first=True, padding_value=0)
-    ge_mask = ~(ge_padded == 0)
-    return ge_padded, ge_mask, en_padded, en_mask
+    inputs = [torch.tensor(x[0]) for x in batch]
+    targets = torch.tensor([x[1] for x in batch])
+    inputs_padded = pad_sequence(inputs, batch_first=True, padding_value=0)  # corresponds to <PAD>
+    mask = ~(inputs_padded == 0)
+    return inputs_padded, mask, targets
 
-def get_data(from_disk=True, batch_size=64, eval_frac=0.1, test_frac=0.05) -> (DataLoader, DataLoader, Vocabulary, Vocabulary):
-    if from_disk:
-        data_tok, vocab_en, vocab_de = load_tokens("data/data.h5", "data/vocab_en.json", "data/vocab_de.json")
-    else:
-        data_tok, vocab_en, vocab_de = generate_tokens("data/data.txt", 30000, save=True)
-    data_tok = [(torch.from_numpy(pair[0]), torch.from_numpy(pair[1])) for pair in data_tok]
+def get_data(batch_size:int=64) -> (DataLoader, DataLoader, DataLoader, Vocabulary): 
+    train_data = load_data("data/merged_dataset_train.csv")
+    eval_data = load_data("data/merged_dataset_valid.csv")
+    test_data = load_data("data/merged_dataset_test.csv")
 
-    train_high = int(len(data_tok)*(1-eval_frac-test_frac))
-    eval_high = train_high + int(len(data_tok)*eval_frac)
-    trainloader = DataLoader(data_tok[:train_high], batch_size=batch_size, collate_fn=prep_batch, shuffle=True)
-    evalloader = DataLoader(data_tok[train_high:eval_high], batch_size=256, collate_fn=prep_batch, shuffle=True)
-    testloader = DataLoader(data_tok[eval_high:], batch_size=10, collate_fn=prep_batch, shuffle=True)
+    train_tokens = process_text(train_data)
+    eval_tokens = process_text(eval_data)
+    test_tokens = process_text(test_data)
 
-    return trainloader, evalloader, testloader, vocab_en, vocab_de
+    vocab = Vocabulary()
+    text = [t[0] for t in train_tokens+eval_tokens]
+    vocab.build(text, vocab_size=30000)
+
+    train_indices = [[vocab.words_to_indices(d[0]), d[1]] for d in train_tokens]
+    eval_indices = [[vocab.words_to_indices(d[0]), d[1]] for d in eval_tokens]
+    test_indices = [[vocab.words_to_indices(d[0]), d[1]] for d in eval_tokens]
+
+    trainloader = DataLoader(train_indices, batch_size=batch_size, collate_fn=prep_batch, shuffle=True)
+    evalloader = DataLoader(eval_indices, batch_size=batch_size, collate_fn=prep_batch, shuffle=True)
+    testloader = DataLoader(test_indices, batch_size=batch_size, collate_fn=prep_batch, shuffle=True)
+
+    return trainloader, evalloader, testloader, vocab
 

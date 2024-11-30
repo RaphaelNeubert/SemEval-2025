@@ -186,3 +186,21 @@ class Transformer(nn.Module):
 
         return tgt_indices
 
+
+
+class SemModel(nn.Module):
+    def __init__(self, vocab_size, num_classes, dim_embeddings, num_heads, ffn_hidden_dims, 
+                 num_encoder_layers, max_seq_len=5000, dropout=0):
+        super().__init__()
+        self.embedding = nn.Embedding(vocab_size, dim_embeddings)
+        self.positional_encoding = PositionalEncoding(dim_embeddings, max_seq_len, dropout)
+        self.encoder = Encoder(dim_embeddings, num_heads, ffn_hidden_dims, num_encoder_layers, dropout)
+        self.fc = nn.Linear(dim_embeddings, num_classes)
+
+    def forward(self, x, mask=None):
+        x = self.embedding(x)
+        x = self.positional_encoding(x)
+        enc_out = self.encoder(x, mask=mask)
+        out = self.fc(enc_out[:,0,:])
+        return out
+
