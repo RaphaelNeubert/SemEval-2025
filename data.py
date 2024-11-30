@@ -6,6 +6,20 @@ from collections import Counter
 from torch.utils.data import DataLoader
 from torch.nn.utils.rnn import pad_sequence
 import torch
+from dataclasses import dataclass
+
+@dataclass
+class DataConfig:
+    train_path: str = "data/merged_dataset_train.csv"
+    valid_path: str = "data/merged_dataset_valid.csv"
+    test_path: str =  "data/merged_dataset_test.csv"
+    vocab_size: int = 30000
+    batch_size_train: int = 64
+    batch_size_eval: int = 64
+    batch_size_test: int = 64
+    pad_token: str = "<PAD>"
+    unk_token: str = "<UNK>"
+
 
 class Vocabulary:
     # <PAD> token always gets index 0
@@ -76,26 +90,26 @@ def prep_batch(batch):
     mask = ~(inputs_padded == 0)
     return inputs_padded, mask, targets
 
-def get_data(batch_size:int=64) -> (DataLoader, DataLoader, DataLoader, Vocabulary): 
-    train_data = load_data("data/merged_dataset_train.csv")
-    eval_data = load_data("data/merged_dataset_valid.csv")
-    test_data = load_data("data/merged_dataset_test.csv")
+def get_data(config: DataConfig) -> (DataLoader, DataLoader, DataLoader, Vocabulary): 
+    train_data = load_data(config.train_path)
+    eval_data = load_data(config.valid_path)
+    test_data = load_data(config.test_path)
 
     train_tokens = process_text(train_data)
     eval_tokens = process_text(eval_data)
     test_tokens = process_text(test_data)
 
-    vocab = Vocabulary()
+    vocab = Vocabulary(pad_token=config.pad_token, unk_token=config.unk_token)
     text = [t[0] for t in train_tokens+eval_tokens]
-    vocab.build(text, vocab_size=30000)
+    vocab.build(text, vocab_size=config.vocab_size)
 
     train_indices = [[vocab.words_to_indices(d[0]), d[1]] for d in train_tokens]
     eval_indices = [[vocab.words_to_indices(d[0]), d[1]] for d in eval_tokens]
     test_indices = [[vocab.words_to_indices(d[0]), d[1]] for d in eval_tokens]
 
-    trainloader = DataLoader(train_indices, batch_size=batch_size, collate_fn=prep_batch, shuffle=True)
-    evalloader = DataLoader(eval_indices, batch_size=batch_size, collate_fn=prep_batch, shuffle=True)
-    testloader = DataLoader(test_indices, batch_size=batch_size, collate_fn=prep_batch, shuffle=True)
+    trainloader = DataLoader(train_indices, batch_size=config.batch_size_train, collate_fn=prep_batch, shuffle=True)
+    evalloader = DataLoader(eval_indices, batch_size=config.batch_size_eval, collate_fn=prep_batch, shuffle=True)
+    testloader = DataLoader(test_indices, batch_size=config.batch_size_test, collate_fn=prep_batch, shuffle=True)
 
     return trainloader, evalloader, testloader, vocab
 

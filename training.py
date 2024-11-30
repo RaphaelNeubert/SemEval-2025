@@ -1,6 +1,22 @@
 import torch
 import torch.nn.functional as F
 from tqdm import tqdm
+from dataclasses import dataclass
+
+
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+@dataclass
+class TrainingConfig:
+    device: str = 'cpu'
+    learning_rate: float = 0.001
+    num_epochs: int = 10
+    log_interval: int = 100    # Steps between logging training loss
+    eval_interval: int = 1000  # Steps between evaluations
+    save_interval: int = 500   # Steps between saving model weights
+    save_weights: bool = False
+    save_weights_to: str = "./weights/weights.pth"
+    disable_tqdm: bool = False
 
 def evaluate(model, dataloader):
     model.eval()
@@ -24,11 +40,12 @@ def evaluate(model, dataloader):
     model.train()
     return eval_loss, acc
 
-def training(model):
+def training(config: TrainingConfig, model, trainloader, evalloader, log_writer=None):
+    opt = torch.optim.Adam(model.parameters(), lr=config.learning_rate)
     steps = 0
     loss_accu = 0
-    for epoch in range(1):
-        for inputs, mask, targets in tqdm(trainloader):
+    for epoch in range(config.num_epochs):
+        for inputs, mask, targets in tqdm(trainloader, disable=config.disable_tqdm):
             inputs, mask, targets = inputs.to(device), mask.to(device), targets.to(device)
             opt.zero_grad()
 
@@ -38,19 +55,21 @@ def training(model):
             loss.backward()
             opt.step()
 
-            if (steps+1)%100 == 0:
+            if (steps+1)%config.log_interval == 0:
                 tqdm.write(f"train_loss: {loss_accu/100}")
-                writer.add_scalar("training/loss", loss_accu/100, global_step=steps)
+                if log_writer is not None:
+                    log_writer.add_scalar("training/loss", loss_accu/100, global_step=steps)
                 loss_accu = 0 
 
-            if steps%1000 == 0:
+            if steps%config.eval_interval == 0:
                 eval_loss, eval_acc = evaluate(model, evalloader)
                 tqdm.write(f"eval_loss: {eval_loss:.4f}, acc: {eval_acc:.4f}")
-                writer.add_scalar("evaluation/loss", eval_loss, global_step=steps)
-                writer.add_scalar("evaluation/accuracy", eval_acc, global_step=steps)
+                if log_writer is not None:
+                    log_writer.add_scalar("evaluation/loss", eval_loss, global_step=steps)
+                    log_writer.add_scalar("evaluation/accuracy", eval_acc, global_step=steps)
 
-            if steps%500 == 0:
-                if SAVE_WEIGHTS:
-                    torch.save(model.state_dict(), SAVE_WEIGHTS_TO)
+            if steps%config.save_interval == 0:
+                if config.save_weights:
+                    torch.save(model.state_dict(), config.save_weights_to.replace("<training_step>", f"steps"))
 
             steps += 1

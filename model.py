@@ -1,6 +1,18 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from dataclasses import dataclass
+
+
+@dataclass
+class ModelConfig:
+    num_classes: int = 5
+    dim_embeddings: int = 512
+    num_heads: int = 8
+    feed_forward_hidden_dims: int = 512*4
+    num_encoder_layers: int = 6
+    dropout: int = 0.1
+    max_seq_len: int = 5000
 
 class PositionalEncoding(nn.Module):
     def __init__(self, dim_embeddings, max_len=5000, dropout=0):
@@ -106,96 +118,15 @@ class Encoder(nn.Module):
             x = layer(x, mask)
         return x
 
-class DecoderLayer(nn.Module):
-    def __init__(self, dim_embeddings, num_heads, hidden_dims, dropout=0):
+
+class SemEvalModel(nn.Module):
+    def __init__(self, vocab_size, config: ModelConfig):
         super().__init__()
-        self.mha1 = MultiHeadAttention(dim_embeddings, num_heads, dropout=dropout)
-        self.mha2 = MultiHeadAttention(dim_embeddings, num_heads, dropout=dropout)
-        self.ffn = FeedForwardNetwork(dim_embeddings, hidden_dims, dropout=dropout)
-        self.norm1 = nn.LayerNorm(dim_embeddings)
-        self.norm2 = nn.LayerNorm(dim_embeddings)
-        self.norm3 = nn.LayerNorm(dim_embeddings)
-        
-    def forward(self, x, enc_output, src_mask=None, tgt_mask=None):
-        x_norm = self.norm1(x)
-        x = x + self.mha1(x_norm, x_norm, x_norm, mask=tgt_mask, causal=True)
-        enc_norm = self.norm2(enc_output)
-        x = x + self.mha2(self.norm2(x), enc_norm, enc_norm, mask=src_mask)
-        x = x + self.ffn(self.norm3(x))
-        return x
-
-class Decoder(nn.Module):
-    def __init__(self, dim_embeddings, num_heads, hidden_dims, num_layers, dropout=0):
-        super().__init__()
-        self.dec_layers = nn.ModuleList([DecoderLayer(dim_embeddings, num_heads, hidden_dims, dropout=dropout)
-                                         for _ in range(num_layers)])
-    def forward(self, tgt, enc_output, src_mask=None, tgt_mask=None):
-        for layer in self.dec_layers:
-            out = layer(tgt, enc_output, src_mask, tgt_mask)
-        return out
-    
-class Transformer(nn.Module):
-    def __init__(self, src_vocab_size, tgt_vocab_size, dim_embeddings, num_heads, ffn_hidden_dims, 
-                 num_encoder_layers, num_decoder_layers, max_seq_len=5000, dropout=0):
-        super().__init__()
-        self.dim_embeddings = dim_embeddings
-        self.tgt_vocab_size = tgt_vocab_size
-        self.src_embedding = nn.Embedding(src_vocab_size, dim_embeddings)
-        self.tgt_embedding = nn.Embedding(tgt_vocab_size, dim_embeddings)
-        self.positional_encoding = PositionalEncoding(dim_embeddings, max_seq_len, dropout)
-        self.encoder = Encoder(dim_embeddings, num_heads, ffn_hidden_dims, num_encoder_layers, dropout)
-        self.decoder = Decoder(dim_embeddings, num_heads, ffn_hidden_dims, num_decoder_layers, dropout)
-        self.fc = nn.Linear(dim_embeddings, tgt_vocab_size)
-        
-    def forward(self, src, tgt, src_mask=None, tgt_mask=None):
-        src = self.src_embedding(src)
-        src = self.positional_encoding(src)
-        enc_out = self.encoder(src, mask=src_mask)
-
-        tgt_seq_len = tgt.shape[1]
-        tgt = self.tgt_embedding(tgt)
-        tgt = self.positional_encoding(tgt)
-        out = self.decoder(tgt, enc_out, src_mask, tgt_mask)
-        out = self.fc(out.view(-1, self.dim_embeddings))
-        out = out.view(-1, tgt_seq_len, self.tgt_vocab_size)
-        #out = F.softmax(out, dim=-1)
-        return out
-
-    def inference(self, src, start_index, end_index, src_mask=None, max_len=1000, temperature=0):
-        src = self.src_embedding(src)
-        src = self.positional_encoding(src)
-        enc_out = self.encoder(src, mask=src_mask)
-
-        tgt_indices = torch.tensor([[start_index]], dtype=torch.long, device=src.device)
-
-        for _ in range(max_len-1):
-            tgt = self.tgt_embedding(tgt_indices)
-            tgt = self.positional_encoding(tgt)
-
-            out = self.decoder(tgt, enc_out, src_mask=src_mask)
-            out = self.fc(out[:, -1, :])
-            if temperature == 0:
-                next_token = torch.argmax(out, dim=-1).item()
-            else:
-                probabilities = torch.softmax(out/temperature, dim=-1)
-                next_token = torch.multinomial(probabilities, num_samples=1).item()
-
-            tgt_indices = torch.cat((tgt_indices, torch.tensor([[next_token]], device=src.device)), dim=1)
-            if next_token == end_index:
-                break
-
-        return tgt_indices
-
-
-
-class SemModel(nn.Module):
-    def __init__(self, vocab_size, num_classes, dim_embeddings, num_heads, ffn_hidden_dims, 
-                 num_encoder_layers, max_seq_len=5000, dropout=0):
-        super().__init__()
-        self.embedding = nn.Embedding(vocab_size, dim_embeddings)
-        self.positional_encoding = PositionalEncoding(dim_embeddings, max_seq_len, dropout)
-        self.encoder = Encoder(dim_embeddings, num_heads, ffn_hidden_dims, num_encoder_layers, dropout)
-        self.fc = nn.Linear(dim_embeddings, num_classes)
+        self.embedding = nn.Embedding(vocab_size, config.dim_embeddings)
+        self.positional_encoding = PositionalEncoding(config.dim_embeddings, config.max_seq_len, config.dropout)
+        self.encoder = Encoder(config.dim_embeddings, config.num_heads, 
+                               config.feed_forward_hidden_dims, config.num_encoder_layers, config.dropout)
+        self.fc = nn.Linear(config.dim_embeddings, config.num_classes)
 
     def forward(self, x, mask=None):
         x = self.embedding(x)
