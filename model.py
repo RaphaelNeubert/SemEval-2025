@@ -135,3 +135,19 @@ class SemEvalModel(nn.Module):
         out = self.fc(enc_out[:,0,:])
         return out
 
+class PretrainModel(nn.Module):
+    def __init__(self, vocab_size, config: ModelConfig):
+        super().__init__()
+        self.embedding = nn.Embedding(vocab_size, config.dim_embeddings)
+        self.positional_encoding = PositionalEncoding(config.dim_embeddings, config.max_seq_len, config.dropout)
+        self.encoder = Encoder(config.dim_embeddings, config.num_heads, 
+                               config.feed_forward_hidden_dims, config.num_encoder_layers, config.dropout)
+        self.fc = nn.Linear(config.dim_embeddings, vocab_size)
+
+    def forward(self, x, mask=None):
+        x = self.embedding(x)
+        x = self.positional_encoding(x)
+        enc_out = self.encoder(x, mask=mask)
+        out = self.fc(enc_out[:,:,:])
+        return out
+
