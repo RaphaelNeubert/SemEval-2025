@@ -14,6 +14,7 @@ class TrainingConfig:
     save_interval: int = 500   # Steps between saving model weights
     save_weights: bool = False
     save_weights_to: str = "./weights/weights.pth"
+    unfreeze_count: int = 2
 
 def print_preds_batch(inputs, pred_classes, targets, vocab, writer=None, step=0):
     class_labels = ["anger", "fear", "joy", "sadness", "suprise"]
@@ -68,12 +69,26 @@ def finetune_evaluate(model, dataloader, print_test_evals=False, vocab=None, wri
     model.train()
     return eval_loss, acc, precision, recall, f1
 
+
+def model_freeze(model, unfreeze_count: int):
+    unfroozen_params = []
+    for p in model.parameters():
+        p.require_grad = False
+    for l in model.encoder.enc_layers[:-unfreeze_count]:
+        for p in l.parameters():
+            p.require_grad = True
+            unfroozen_params.append(p)
+
+    return unfroozen_params
+
 def finetuning(config: TrainingConfig, model, trainloader, evalloader, log_writer=None,
                print_test_evals=False, vocab=None, disable_tqdm=False):
     """
     if print_test_evals is set to True, vocab is expected to be not None
     """
-    opt = torch.optim.Adam(model.parameters(), lr=config.learning_rate)
+    device = config.device
+    unfroozen_params = model_freeze(model, config.unfreeze_count)
+    opt = torch.optim.Adam(unfroozen_params, lr=config.learning_rate)
     steps = 0
     loss_accu = 0
     for epoch in range(config.num_epochs):
