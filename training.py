@@ -117,24 +117,33 @@ def pretrain_evaluate(model, evalloader, mask_token_id: int, disable_tqdm=False)
     total_loss = 0
     total_corr = 0
     total_samples = 0
+    masked_correct = 0
+    masked_total = 0
     for inputs, mask, targets in tqdm(evalloader, desc="evaluation", disable=disable_tqdm):
         inputs, mask, targets = inputs.to(device), mask.to(device), targets.to(device)
         with torch.no_grad():
+            masked_tokens = (inputs ==  mask_token_id)
+
             preds = model(inputs, mask)
             loss = torch.nn.CrossEntropyLoss()(preds.view(-1,preds.shape[-1]), targets.view(-1))
             total_loss += loss.item()
+
             preds = torch.argmax(preds, dim=-1)
             corr = (preds == targets).all(dim=-1).sum()
             total_corr += corr
             total_samples += inputs.shape[0]
 
-    eval_loss = total_loss / len(evalloader)
-    acc = total_corr / total_samples
-    model.train()
-    return eval_loss, acc
+            masked_correct += (preds[masked_tokens] == targets[masked_tokens]).sum().item()
+            masked_total += masked_tokens.sum()
 
-def pretraining(config: TrainingConfig, model, trainloader, validloader, log_writer=None):
-    device = next(model.parameters()).device
+    eval_loss = total_loss / len(evalloader)
+    acc_total = total_corr / total_samples
+    acc_masked = masked_correct / (masked_total+0.00001)
+    model.train()
+    return eval_loss, acc_total, acc_masked
+
+def pretraining(config: TrainingConfig, model, trainloader, validloader, mask_token_id: int, log_writer=None, disable_tqdm=False):
+    device = config.device
     opt = torch.optim.Adam(model.parameters(), lr=config.learning_rate)
     steps = 0
     loss_accu = 0
@@ -156,11 +165,12 @@ def pretraining(config: TrainingConfig, model, trainloader, validloader, log_wri
                 loss_accu = 0 
 
             if steps%config.eval_interval == 0:
-                eval_loss, eval_acc = pretrain_evaluate(model, validloader, disable_tqdm=config.disable_tqdm)
-                tqdm.write(f"eval_loss: {eval_loss:.4f}, acc: {eval_acc:.4f}")
+                eval_loss, eval_acc, eval_acc_masked = pretrain_evaluate(model, validloader, mask_token_id, disable_tqdm=disable_tqdm)
+                tqdm.write(f"eval_loss: {eval_loss:.4f}, acc: {eval_acc:.4f}, acc_masked: {eval_acc_masked:.4f}")
                 if log_writer is not None:
                     log_writer.add_scalar("preevaluation/loss", eval_loss, global_step=steps)
                     log_writer.add_scalar("preevaluation/accuracy", eval_acc, global_step=steps)
+                    log_writer.add_scalar("preevaluation/accuracy_masked", eval_acc_masked, global_step=steps)
 
             if steps%config.save_interval == 0:
                 if config.save_weights:
