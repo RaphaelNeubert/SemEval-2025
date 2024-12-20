@@ -184,7 +184,7 @@ def load_pretraining_data(config: DataConfig, vocab: Vocabulary):
                                                                           config.pretraining_mask_selection_prob,
                                                                           config.pretraining_mask_mask_prob,
                                                                           config.pretraining_mask_random_selection_prob))
-    testloader = DataLoader(test_ds, batch_size=config.pretraining_batch_size_eval, num_workers=0,
+    testloader = DataLoader(test_ds, batch_size=config.pretraining_batch_size_eval, num_workers=2,
                              collate_fn=lambda batch: pretrain_prep_batch(batch, vocab, 
                                                                           config.pretraining_mask_selection_prob,
                                                                           config.pretraining_mask_mask_prob,

@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+
 from model import ModelConfig
 from training import TrainingConfig
 from data import DataConfig
@@ -8,7 +9,10 @@ import torch
 @dataclass
 class Config:
     load_weights: bool = False
-    load_weights_from: str = "./weights/weights-44000.pth"
+    load_weights_from: str = "./weights/weights-22000.pth"
+
+    load_pretrain_weights: bool = False
+    load_pretrain_weights_from: str = "./weights/pretrain_weights-350000.pth"
 
     device: str = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -19,16 +23,15 @@ class Config:
         num_encoder_layers = 6,
         dropout = 0.3
     )
-    training_config = TrainingConfig(
+    finetune_config = TrainingConfig(
         device = device,
         learning_rate = 0.0001,
         num_epochs = 20,
         log_interval = 100,           # Log training loss every log_interval steps
         eval_interval = 1000,         # Evaluate the model every eval_interval steps
         save_interval = 1000,         # Save weights every save_interval steps
-        save_weights = True,
+        save_weights = False,
         save_weights_to = "./weights/weights-<training_step>.pth", # <training_step> placeholder will be replaced
-        disable_tqdm = True
     )
     pretraining_config = TrainingConfig(
         device = device,
@@ -36,10 +39,10 @@ class Config:
         num_epochs = 20,
         log_interval = 100,           # Log training loss every log_interval steps
         eval_interval = 1000,         # Evaluate the model every eval_interval steps
-        save_interval = 1000,         # Save weights every save_interval steps
-        save_weights = True,
+        save_interval = 10000,         # Save weights every save_interval steps
+        save_weights = False,
         save_weights_to = "./weights/pretrain_weights-<training_step>.pth", # <training_step> placeholder will be replaced
-        disable_tqdm = False
+        unfreeze_count = 2
     )
     data_config = DataConfig(
         train_path="data/merged_dataset_train.csv",
