@@ -34,13 +34,13 @@ def print_preds_batch(inputs, pred_classes, targets, vocab, writer=None, step=0)
         writer.add_text(f"Example emotion detections", text, global_step=step)
 
 
-def evaluate(model, dataloader, print_test_evals=False, vocab=None, writer=None, step=0):
+def finetune_evaluate(model, dataloader, print_test_evals=False, vocab=None, writer=None, step=0, disable_tqdm=False):
     model.eval()
-    total_loss = 0
-    total_corr = 0
-    total_samples = 0
+    device = next(model.parameters()).device
+    total_loss, total_corr, total_samples = 0, 0, 0
+    true_positives, false_positives, false_negatives = 0, 0, 0
     with torch.no_grad():
-        for i, (inputs, mask, targets) in enumerate(dataloader):
+        for i, (inputs, mask, targets) in enumerate(tqdm(dataloader, disable=disable_tqdm)):
             inputs, mask, targets = inputs.to(device), mask.to(device), targets.to(device)
             preds = model(inputs, mask)
             loss = torch.nn.BCEWithLogitsLoss()(preds, targets.to(torch.float))
@@ -49,15 +49,25 @@ def evaluate(model, dataloader, print_test_evals=False, vocab=None, writer=None,
             probs = torch.sigmoid(preds)
             pred_classes = (probs > 0.5).to(torch.int)
             total_corr += (pred_classes == targets).all(dim=-1).sum().item()
-            total_samples += targets.shape[0]
+            total_samples += targets.size(0)
+
+            true_positives += ((pred_classes == 1) & (targets == 1)).sum().item()
+            false_positives += ((pred_classes == 1) & (targets == 0)).sum().item()
+            false_negatives += ((pred_classes == 0) & (targets == 1)).sum().item()
 
             if i == 0:
                 print_preds_batch(inputs, pred_classes, targets, vocab, writer, step)
 
     eval_loss = total_loss / len(dataloader)
     acc = total_corr / total_samples
+
+    precision = true_positives / (true_positives + false_positives) if (true_positives + false_positives) > 0 else 0
+    recall = true_positives / (true_positives + false_negatives) if (true_positives + false_negatives) > 0 else 0
+    f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0
+
+
     model.train()
-    return eval_loss, acc
+    return eval_loss, acc, precision, recall, f1
 
 def training(config: TrainingConfig, model, trainloader, evalloader, log_writer=None, print_test_evals=False, vocab=None):
     """
@@ -84,12 +94,15 @@ def training(config: TrainingConfig, model, trainloader, evalloader, log_writer=
                 loss_accu = 0 
 
             if steps%config.eval_interval == 0:
-                eval_loss, eval_acc = evaluate(model, evalloader, print_test_evals=print_test_evals, 
-                                               vocab=vocab, writer=log_writer, step=steps)
-                tqdm.write(f"eval_loss: {eval_loss:.4f}, acc: {eval_acc:.4f}")
+                eval_loss, eval_acc, precision, recall, f1 = finetune_evaluate(model, evalloader, print_test_evals=print_test_evals, 
+                                               vocab=vocab, writer=log_writer, step=steps, disable_tqdm=disable_tqdm)
+                tqdm.write(f"eval_loss: {eval_loss:.4f}, acc: {eval_acc:.4f}, precision: {precision:.4f}, recall: {recall:.4f}, f1_score: {f1:.4f}")
                 if log_writer is not None:
                     log_writer.add_scalar("evaluation/loss", eval_loss, global_step=steps)
                     log_writer.add_scalar("evaluation/accuracy", eval_acc, global_step=steps)
+                    log_writer.add_scalar("evaluation/precision", precision, global_step=steps)
+                    log_writer.add_scalar("evaluation/recall", recall, global_step=steps)
+                    log_writer.add_scalar("evaluation/f1", f1, global_step=steps)
 
             if steps%config.save_interval == 0:
                 if config.save_weights:
