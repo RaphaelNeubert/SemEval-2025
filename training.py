@@ -14,7 +14,6 @@ class TrainingConfig:
     save_interval: int = 500   # Steps between saving model weights
     save_weights: bool = False
     save_weights_to: str = "./weights/weights.pth"
-    disable_tqdm: bool = False
 
 def print_preds_batch(inputs, pred_classes, targets, vocab, writer=None, step=0):
     class_labels = ["anger", "fear", "joy", "sadness", "suprise"]
@@ -69,7 +68,8 @@ def finetune_evaluate(model, dataloader, print_test_evals=False, vocab=None, wri
     model.train()
     return eval_loss, acc, precision, recall, f1
 
-def training(config: TrainingConfig, model, trainloader, evalloader, log_writer=None, print_test_evals=False, vocab=None):
+def finetuning(config: TrainingConfig, model, trainloader, evalloader, log_writer=None,
+               print_test_evals=False, vocab=None, disable_tqdm=False):
     """
     if print_test_evals is set to True, vocab is expected to be not None
     """
@@ -77,7 +77,7 @@ def training(config: TrainingConfig, model, trainloader, evalloader, log_writer=
     steps = 0
     loss_accu = 0
     for epoch in range(config.num_epochs):
-        for inputs, mask, targets in tqdm(trainloader, disable=config.disable_tqdm):
+        for inputs, mask, targets in tqdm(trainloader, disable=disable_tqdm):
             inputs, mask, targets = inputs.to(device), mask.to(device), targets.to(device)
             opt.zero_grad()
 
@@ -110,7 +110,7 @@ def training(config: TrainingConfig, model, trainloader, evalloader, log_writer=
 
             steps += 1
 
-def pretrain_evaluate(model, evalloader, disable_tqdm=False):
+def pretrain_evaluate(model, evalloader, mask_token_id: int, disable_tqdm=False):
     device = next(model.parameters()).device
     model.eval()
 
@@ -139,7 +139,7 @@ def pretraining(config: TrainingConfig, model, trainloader, validloader, log_wri
     steps = 0
     loss_accu = 0
     for epoch in range(config.num_epochs):
-        for inputs, mask, targets in tqdm(trainloader, disable=config.disable_tqdm):
+        for inputs, mask, targets in tqdm(trainloader, disable=disable_tqdm):
             inputs, mask, targets = inputs.to(device), mask.to(device), targets.to(device)
             opt.zero_grad()
 
