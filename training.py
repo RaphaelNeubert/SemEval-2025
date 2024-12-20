@@ -153,7 +153,7 @@ def pretrain_evaluate(model, evalloader, mask_token_id: int, disable_tqdm=False)
 
     eval_loss = total_loss / len(evalloader)
     acc_total = total_corr / total_samples
-    acc_masked = masked_correct / (masked_total+0.00001)
+    acc_masked = masked_correct / masked_total if masked_total > 0 else 0
     model.train()
     return eval_loss, acc_total, acc_masked
 
