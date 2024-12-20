@@ -24,6 +24,7 @@ def init_argparser():
     return parser
 
 def interactive(model, vocab):
+    model.eval()
     device = next(model.parameters()).device
     class_labels = ["anger", "fear", "joy", "sadness", "suprise"]
     while True:

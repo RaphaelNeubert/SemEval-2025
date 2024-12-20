@@ -8,6 +8,7 @@ import zipfile
 pd.set_option('display.max_columns', 300)
 
 def submit(model, vocab):
+    model.eval()
     device = next(model.parameters()).device
     emotions = ["Anger", "Fear", "Joy", "Sadness", "Surprise"]
     df = pd.read_csv("data/eng_a.csv")
