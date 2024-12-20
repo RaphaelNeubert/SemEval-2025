@@ -107,7 +107,7 @@ def finetune_prep_batch(batch):
     mask = ~(inputs_padded == 0)
     return inputs_padded, mask, targets
 
-def get_data(config: DataConfig) -> (DataLoader, DataLoader, DataLoader): 
+def get_finetune_data(config: DataConfig, vocab: Vocabulary) -> (DataLoader, DataLoader, DataLoader): 
     train_data = load_data(config.train_path)
     eval_data = load_data(config.valid_path)
     test_data = load_data(config.test_path)
@@ -116,9 +116,6 @@ def get_data(config: DataConfig) -> (DataLoader, DataLoader, DataLoader):
     eval_tokens = process_text(eval_data)
     test_tokens = process_text(test_data)
 
-    vocab = Vocabulary(pad_token=config.pad_token, unk_token=config.unk_token)
-    text = [t[0] for t in train_tokens+eval_tokens]
-    vocab.build(text, vocab_size=config.vocab_size)
 
     train_indices = [[vocab.words_to_indices(d[0]), d[1]] for d in train_tokens]
     eval_indices = [[vocab.words_to_indices(d[0]), d[1]] for d in eval_tokens]
