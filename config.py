@@ -8,13 +8,16 @@ import torch
 
 @dataclass
 class Config:
-    load_weights: bool = False
+    load_weights: bool = True
     load_weights_from: str = "./weights/weights-22000.pth"
 
     load_pretrain_weights: bool = False
     load_pretrain_weights_from: str = "./weights/pretrain_weights-350000.pth"
 
     device: str = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    #                           Anger     Fear      Joy      Sadness   Surprise
+    label_set_thresholds = [ 0.160263, 0.129352, 0.357197, 0.313231, 0.046307]
+    #label_set_thresholds = [0.5]*5
 
     model_config = ModelConfig(
         num_classes = 5,

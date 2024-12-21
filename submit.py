@@ -7,7 +7,7 @@ import zipfile
 #pd.set_option('display.max_rows', 200)
 pd.set_option('display.max_columns', 300)
 
-def submit(model, vocab):
+def submit(model, vocab, label_set_thresholds):
     model.eval()
     device = next(model.parameters()).device
     emotions = ["Anger", "Fear", "Joy", "Sadness", "Surprise"]
@@ -16,7 +16,7 @@ def submit(model, vocab):
         sentence_processed = re.sub(r'([.,!?()"\'])', r' \1 ', sentence.lower()).split()
         indices = torch.tensor(vocab.words_to_indices(sentence_processed), device=device).unsqueeze(0)
         pred = torch.sigmoid(model(indices).squeeze())
-        pred_classes = (pred > 0.5).to("cpu")
+        pred_classes = (pred > torch.tensor(label_set_thresholds, device=device)).to("cpu")
         for emo, label in zip(emotions, pred_classes):
             #print(label)
             df.loc[i, emo] = int(label.item())

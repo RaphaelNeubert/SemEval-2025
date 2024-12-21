@@ -14,7 +14,7 @@ class TrainingConfig:
     save_interval: int = 500   # Steps between saving model weights
     save_weights: bool = False
     save_weights_to: str = "./weights/weights.pth"
-    unfreeze_count: int = 2
+    unfreeze_count: int = 2    # pretraining only
 
 def print_preds_batch(inputs, pred_classes, targets, vocab, writer=None, step=0):
     class_labels = ["anger", "fear", "joy", "sadness", "suprise"]
@@ -34,7 +34,8 @@ def print_preds_batch(inputs, pred_classes, targets, vocab, writer=None, step=0)
         writer.add_text(f"Example emotion detections", text, global_step=step)
 
 
-def finetune_evaluate(model, dataloader, print_test_evals=False, vocab=None, writer=None, step=0, disable_tqdm=False):
+def finetune_evaluate(model, dataloader, label_set_thresholds, print_test_evals=False, vocab=None, 
+                      writer=None, step=0, disable_tqdm=False):
     model.eval()
     device = next(model.parameters()).device
     total_loss, total_corr, total_samples = 0, 0, 0
@@ -47,7 +48,7 @@ def finetune_evaluate(model, dataloader, print_test_evals=False, vocab=None, wri
             total_loss += loss.item()
 
             probs = torch.sigmoid(preds)
-            pred_classes = (probs > 0.5).to(torch.int)
+            pred_classes = (probs > torch.tensor(label_set_thresholds, device=device)).to(torch.int)
             total_corr += (pred_classes == targets).all(dim=-1).sum().item()
             total_samples += targets.size(0)
 
@@ -81,8 +82,8 @@ def model_freeze(model, unfreeze_count: int):
 
     return unfroozen_params
 
-def finetuning(config: TrainingConfig, model, trainloader, evalloader, log_writer=None,
-               print_test_evals=False, vocab=None, disable_tqdm=False):
+def finetuning(config: TrainingConfig, model, trainloader, evalloader, label_set_thresholds,
+               log_writer=None, print_test_evals=False, vocab=None, disable_tqdm=False):
     """
     if print_test_evals is set to True, vocab is expected to be not None
     """
@@ -109,8 +110,8 @@ def finetuning(config: TrainingConfig, model, trainloader, evalloader, log_write
                 loss_accu = 0 
 
             if steps%config.eval_interval == 0:
-                eval_loss, eval_acc, precision, recall, f1 = finetune_evaluate(model, evalloader, print_test_evals=print_test_evals, 
-                                               vocab=vocab, writer=log_writer, step=steps, disable_tqdm=disable_tqdm)
+                eval_loss, eval_acc, precision, recall, f1 = finetune_evaluate(model, evalloader, label_set_thresholds, print_test_evals=print_test_evals,
+                                                                               vocab=vocab, writer=log_writer, step=steps, disable_tqdm=disable_tqdm)
                 tqdm.write(f"eval_loss: {eval_loss:.4f}, acc: {eval_acc:.4f}, precision: {precision:.4f}, recall: {recall:.4f}, f1_score: {f1:.4f}")
                 if log_writer is not None:
                     log_writer.add_scalar("evaluation/loss", eval_loss, global_step=steps)

@@ -24,7 +24,7 @@ def init_argparser():
     parser.add_argument("-l", "--log", action="store_true", help="Enable tensorboard logging")
     return parser
 
-def interactive(model, vocab):
+def interactive(model, vocab, label_set_thresholds):
     model.eval()
     device = next(model.parameters()).device
     class_labels = ["anger", "fear", "joy", "sadness", "suprise"]
@@ -35,7 +35,7 @@ def interactive(model, vocab):
         print(indices)
         pred = torch.sigmoid(model(indices).squeeze())
         print("pred_probs:", pred)
-        pred_classes = (pred > 0.5)
+        pred_classes = (pred > torch.tensor(label_set_thresholds, device=device))
         prediction_words = " ".join([class_labels[i] for i in range(len(pred_classes)) if pred_classes[i]==True])
         print(prediction_words)
 
@@ -71,11 +71,11 @@ if __name__ == "__main__":
 
     if args.finetune:
         trainloader, evalloader, _ = get_finetune_data(config.data_config, vocab)
-        finetuning(config.finetune_config, model, trainloader, evalloader, 
-                 log_writer=writer, print_test_evals=True, vocab=vocab, disable_tqdm=disable_tqdm)
+        finetuning(config.finetune_config, model, trainloader, evalloader, config.label_set_thresholds,
+                   log_writer=writer, print_test_evals=True, vocab=vocab, disable_tqdm=disable_tqdm)
 
     elif args.interactive:
-        interactive(model, vocab)
+        interactive(model, vocab, config.label_set_thresholds)
     elif args.submit:
-        submit(model, vocab)
+        submit(model, vocab, config.label_set_thresholds)
 
