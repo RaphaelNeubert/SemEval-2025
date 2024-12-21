@@ -14,10 +14,7 @@ import numpy as np
 
 @dataclass
 class DataConfig:
-    train_path: str = "data/merged_dataset_train.csv"
-    valid_path: str = "data/merged_dataset_valid.csv"
-    test_path: str =  "data/merged_dataset_test.csv"
-    pretraining_path: str = "data/books_large.txt"
+    finetuning_h5_path: str = "data/finetuning_split.h5"
     pretraining_h5_path: str = "data/pretraining_split.h5"
     pretraining_mask_selection_prob: float = 0.1
     pretraining_mask_mask_prob: float = 0.8
@@ -85,46 +82,23 @@ class Vocabulary:
             indices = sample[~(sample==0)]  # remove padding
             print(self.index_to_words(indices))
 
-def load_data(datapath: str) -> list[list[str, list[int]]]:
-    with open(datapath) as f:
-        f.readline() # ignore first line 
-        data = f.readlines()
-    data = [[l.split('\t')[1], list(map(int, l[:-1].split('\t')[2:]))] for l in data]
-    return data
-
-
-def process_text(data: list[list[str, list[int]]]) -> list[list[list[str], list[int]]]:
-    for d in data:
-        d[0] = d[0].lower()
-        d[0] = re.sub(r'([.,!?()"\'])', r' \1 ', d[0]) # add whitespace around punctuation
-        d[0] = d[0].split()
-    return data
 
 def finetune_prep_batch(batch):
-    inputs = [torch.tensor(x[0]) for x in batch]
-    targets = torch.tensor([x[1] for x in batch])
+    inputs = [torch.tensor(x["feature"]) for x in batch]
+    targets = torch.tensor(np.array([x["label"] for x in batch]))
     inputs_padded = pad_sequence(inputs, batch_first=True, padding_value=0)  # corresponds to <PAD>
     mask = ~(inputs_padded == 0)
     return inputs_padded, mask, targets
 
-def get_finetune_data(config: DataConfig, vocab: Vocabulary) -> (DataLoader, DataLoader, DataLoader): 
-    train_data = load_data(config.train_path)
-    eval_data = load_data(config.valid_path)
-    test_data = load_data(config.test_path)
+def load_finetuning_data(config: DataConfig, vocab: Vocabulary):
+    h5f = h5py.File(config.finetuning_h5_path, "r")
+    training_ds = h5f["training"]
+    validation_ds = h5f["validation"]
 
-    train_tokens = process_text(train_data)
-    eval_tokens = process_text(eval_data)
-    test_tokens = process_text(test_data)
+    trainloader = DataLoader(training_ds, batch_size=config.finetune_batch_size_train, collate_fn=finetune_prep_batch, shuffle=True)
+    validloader = DataLoader(validation_ds, batch_size=config.finetune_batch_size_eval, collate_fn=finetune_prep_batch, shuffle=True)
 
-    train_indices = [[vocab.words_to_indices(d[0]), d[1]] for d in train_tokens]
-    eval_indices = [[vocab.words_to_indices(d[0]), d[1]] for d in eval_tokens]
-    test_indices = [[vocab.words_to_indices(d[0]), d[1]] for d in eval_tokens]
-
-    trainloader = DataLoader(train_indices, batch_size=config.finetune_batch_size_train, collate_fn=finetune_prep_batch, shuffle=True)
-    evalloader = DataLoader(eval_indices, batch_size=config.finetune_batch_size_eval, collate_fn=finetune_prep_batch, shuffle=True)
-    testloader = DataLoader(test_indices, batch_size=config.finetune_batch_size_test, collate_fn=finetune_prep_batch, shuffle=True)
-
-    return trainloader, evalloader, testloader
+    return trainloader, validloader
 
 def get_vocab(config: DataConfig):
     if config.load_vocab_from_disk:
@@ -137,7 +111,6 @@ def get_vocab(config: DataConfig):
         vocab.build([t.split() for t in text], vocab_size=config.vocab_size)
         vocab.save(config.vocab_path)
     return vocab
-
 
 
 def pretrain_prep_batch(batch: list[np.array], vocab: Vocabulary,

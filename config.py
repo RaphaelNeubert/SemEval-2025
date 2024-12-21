@@ -48,10 +48,7 @@ class Config:
         unfreeze_count = 2
     )
     data_config = DataConfig(
-        train_path="data/merged_dataset_train.csv",
-        valid_path="data/merged_dataset_valid.csv",
-        test_path="data/merged_dataset_test.csv",
-        pretraining_path="data/books_large.txt",
+        finetuning_h5_path = "data/finetuning_split.h5",
         pretraining_h5_path="data/pretraining_split.h5",
         pretraining_mask_selection_prob=0.1,
         pretraining_mask_mask_prob=0.8,

@@ -1,7 +1,7 @@
 import argparse
 import torch
 import torch.nn.functional as F
-from data import get_finetune_data, get_vocab, load_pretraining_data
+from data import load_finetuning_data, get_vocab, load_pretraining_data
 from model import SemEvalModel, PretrainModel
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
@@ -70,7 +70,7 @@ if __name__ == "__main__":
             model.load_state_dict(pretrain_state_dict, strict=False)
 
     if args.finetune:
-        trainloader, evalloader, _ = get_finetune_data(config.data_config, vocab)
+        trainloader, evalloader = load_finetuning_data(config.data_config, vocab)
         finetuning(config.finetune_config, model, trainloader, evalloader, config.label_set_thresholds,
                    log_writer=writer, print_test_evals=True, vocab=vocab, disable_tqdm=disable_tqdm)
 
