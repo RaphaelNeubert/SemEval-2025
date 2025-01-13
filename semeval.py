@@ -16,7 +16,7 @@ torch.set_printoptions(profile="full")
 def init_argparser():
     parser = argparse.ArgumentParser(description="Transformer based semantic evaluation")
 
-    parser.add_argument("-t", "--enable-tqdm", action="store_true", help="Finetune model")
+    parser.add_argument("-t", "--enable-tqdm", action="store_true", help="Enable TQDM progress bar")
     parser.add_argument("-f", "--finetune", action="store_true", help="Finetune model")
     parser.add_argument("-i", "--interactive", action="store_true", help="Run model queries interactively")
     parser.add_argument("-s", "--submit", action="store_true", help="Run model to label submission file")
