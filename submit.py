@@ -10,8 +10,8 @@ pd.set_option('display.max_columns', 300)
 def submit(model, vocab, label_set_thresholds):
     model.eval()
     device = next(model.parameters()).device
-    emotions = ["Anger", "Fear", "Joy", "Sadness", "Surprise"]
-    df = pd.read_csv("data/eng_a.csv")
+    emotions = ["anger", "fear", "joy", "sadness", "surprise"]
+    df = pd.read_csv("data/public_data_dev/track_a/dev/eng.csv")
     for i, sentence in enumerate(df["text"]):
         sentence_processed = re.sub(r'([.,!?()"\'])', r' \1 ', sentence.lower()).split()
         indices = torch.tensor(vocab.words_to_indices(sentence_processed), device=device).unsqueeze(0)
@@ -23,8 +23,9 @@ def submit(model, vocab, label_set_thresholds):
     df[emotions] = df[emotions].astype(int)
     df = df.drop('text', axis=1)
     print(df)
-    filename = "data/pred_eng_a.csv"
+    #print(df[["id", *emotions]])
+    filename = "data/pred_eng.csv"
     df.to_csv(filename, index=False)
 
     with zipfile.ZipFile("data/submission.zip", 'w', zipfile.ZIP_DEFLATED) as zipf:
-        zipf.write(filename, arcname=os.path.basename(filename))
+        zipf.write(filename, arcname=("track_a/" + os.path.basename(filename)))
