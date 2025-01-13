@@ -74,11 +74,14 @@ def finetune_evaluate(model, dataloader, label_set_thresholds, print_test_evals=
 def model_freeze(model, unfreeze_count: int):
     unfroozen_params = []
     for p in model.parameters():
-        p.require_grad = False
+        p.requires_grad = False
     for l in model.encoder.enc_layers[:-unfreeze_count]:
         for p in l.parameters():
-            p.require_grad = True
+            p.requires_grad = True
             unfroozen_params.append(p)
+    for p in model.fc.parameters():
+        p.requires_grad = True
+        unfroozen_params.append(p)
 
     return unfroozen_params
 
