@@ -36,20 +36,24 @@ class DataConfig:
 
 class Vocabulary:
     # <PAD> token always gets index 0
-    def __init__(self, pad_token: str = "<PAD>", unk_token: str = "<UNK>", mask_token: str = "<MASK>"):
+    def __init__(self, pad_token: str = "<PAD>", unk_token: str = "<UNK>", mask_token: str = "<MASK>", extra_tokens: list[str] = None):
+
         self.pad_token = pad_token
         self.unk_token = unk_token
         self.mask_token = mask_token
-        self.special_tokens = [pad_token, unk_token, mask_token]
-        self.word_to_index = {token: idx for idx, token in enumerate(self.special_tokens)}
-        self.index_to_word = list(self.word_to_index.keys())
+        self.special_tokens = [pad_token, unk_token, mask_token] + (extra_tokens if extra_tokens is not None else [])
 
     def build(self, data: list[list[str]], vocab_size: int):
         words = chain.from_iterable(data)
         counter = Counter(words).most_common(vocab_size-len(self.special_tokens))
 
-        self.word_to_index.update({word: idx + len(self.special_tokens) for idx, (word, _) in enumerate(counter)})
-        self.index_to_word = list(self.word_to_index.keys())
+        self.word_to_index = {token: idx for idx, token in enumerate(self.special_tokens)}
+        self.index_to_word = [None] * vocab_size
+        self.index_to_word[:len(self.special_tokens)] = self.special_tokens
+
+        for idx, (word, _) in enumerate(counter, start=len(self.special_tokens)):
+            self.word_to_index[word] = idx
+            self.index_to_word[idx] = word
 
     def words_to_indices(self, words: list[str]) -> list[int]:
         return [self.word_to_index.get(word, self.word_to_index.get(self.unk_token)) for word in words]
