@@ -69,6 +69,8 @@ if __name__ == "__main__":
             pretrain_state_dict = {k: v for k, v in pretrain_state_dict.items() if not k.startswith('fc.')} # remove linear layer weights
             model.load_state_dict(pretrain_state_dict, strict=False)
 
+        model = torch.compile(model)
+
     if args.finetune:
         trainloader, evalloader = load_finetuning_data(config.data_config, vocab)
         finetuning(config.finetune_config, model, trainloader, evalloader, config.label_set_thresholds,
