@@ -5,12 +5,13 @@ from data import load_finetuning_data, get_vocab, load_pretraining_data
 from model import SemEvalModel, PretrainModel
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
-from training import finetuning, pretraining
+from training import finetuning, pretraining, finetune_evaluate
 from config import Config
 import re
 from submit import submit
 
 torch.set_printoptions(profile="full")
+torch.set_float32_matmul_precision('high')
 
 
 def init_argparser():
@@ -19,6 +20,7 @@ def init_argparser():
     parser.add_argument("-t", "--enable-tqdm", action="store_true", help="Enable TQDM progress bar")
     parser.add_argument("-f", "--finetune", action="store_true", help="Finetune model")
     parser.add_argument("-i", "--interactive", action="store_true", help="Run model queries interactively")
+    parser.add_argument("-e", "--evaluate", action="store_true", help="Run finetune evaluation on the evaluation dataset")
     parser.add_argument("-s", "--submit", action="store_true", help="Run model to label submission file")
     parser.add_argument("-p", "--pretraining", action="store_true", help="Run pretraining")
     parser.add_argument("-l", "--log", action="store_true", help="Enable tensorboard logging")
@@ -60,7 +62,7 @@ if __name__ == "__main__":
         pretraining(config.pretraining_config, model, trainloader, validloader, 
                     mask_token_id=vocab.word_to_index[vocab.mask_token], log_writer=writer, disable_tqdm=disable_tqdm)
 
-    if args.finetune or args.interactive or args.submit:
+    if args.finetune or args.interactive or args.submit or args.evaluate:
         model = SemEvalModel(vocab.size(), config.model_config).to(config.device)
         if config.load_weights:
             model.load_state_dict(torch.load(config.load_weights_from, weights_only=True, map_location=torch.device(config.device)))
@@ -75,6 +77,11 @@ if __name__ == "__main__":
         trainloader, evalloader = load_finetuning_data(config.data_config, vocab)
         finetuning(config.finetune_config, model, trainloader, evalloader, config.label_set_thresholds,
                    log_writer=writer, print_test_evals=True, vocab=vocab, disable_tqdm=disable_tqdm)
+
+    if args.evaluate:
+        _, validloader = load_finetuning_data(config.data_config, vocab)
+        eval_loss, acc, precision, recall, f1 = finetune_evaluate(model, validloader, config.label_set_thresholds)
+        print(f"Eval loss: {eval_loss:.4f}, F1: {f1:.4f}, Precision: {precision:.4f}, Recall: {recall:.4f}, Accuracy: {acc:.4f}")
 
     elif args.interactive:
         interactive(model, vocab, config.label_set_thresholds)
