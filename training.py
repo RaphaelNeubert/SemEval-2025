@@ -56,7 +56,7 @@ def finetune_evaluate(model, dataloader, label_set_thresholds, print_test_evals=
             false_positives += ((pred_classes == 1) & (targets == 0)).sum().item()
             false_negatives += ((pred_classes == 0) & (targets == 1)).sum().item()
 
-            if i == 0:
+            if print_test_evals and i == 0:
                 print_preds_batch(inputs, pred_classes, targets, vocab, writer, step)
 
     eval_loss = total_loss / len(dataloader)
