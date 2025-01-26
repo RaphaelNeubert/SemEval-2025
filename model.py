@@ -23,8 +23,8 @@ class PositionalEncoding(nn.Module):
         div = torch.exp(-torch.arange(0, dim_embeddings, 2) / dim_embeddings * torch.log(torch.tensor(10000)))
 
         pos_enc = torch.zeros(max_len, dim_embeddings)
-        pos_enc[:, ::2] = torch.sin(pos.unsqueeze(-1)/div)
-        pos_enc[:, 1::2] = torch.cos(pos.unsqueeze(-1)/div)
+        pos_enc[:, ::2] = torch.sin(pos.unsqueeze(-1)*div)
+        pos_enc[:, 1::2] = torch.cos(pos.unsqueeze(-1)*div)
         # move automatically to specific device when module is moved
         self.register_buffer("pos_enc", pos_enc)
 
