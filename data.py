@@ -30,6 +30,7 @@ class DataConfig:
     finetune_batch_size_eval: int = 64
     finetune_batch_size_test: int = 64
     pretraining_mask_token: str = "<MASK>"
+    pretraining_label_mask_token: str ="<LABEL_MASK>"
     pad_token: str = "<PAD>"
     unk_token: str = "<UNK>"
 
@@ -117,7 +118,7 @@ def get_vocab(config: DataConfig):
     return vocab
 
 
-def pretrain_prep_batch(batch: list[np.array], vocab: Vocabulary,
+def pretrain_prep_batch(batch: list[np.array], vocab: Vocabulary, label_mask_token_id: int,
                         mask_selection_prob: float, mask_mask_prob: float, mask_random_replace_prob: float):
 
     pad_token_id = vocab.word_to_index[vocab.pad_token]
@@ -138,6 +139,9 @@ def pretrain_prep_batch(batch: list[np.array], vocab: Vocabulary,
         random_tokens = torch.randint(len(vocab.special_tokens), vocab.size(), (random_replace_mask.sum(),))
         t[mask_indices[random_replace_mask]] = random_tokens
 
+        # make sure the label token is always masked away
+        t[-1] = label_mask_token_id
+
     inputs = pad_sequence(inputs, batch_first=True, padding_value=pad_token_id)
     targets = pad_sequence(targets, batch_first=True, padding_value=pad_token_id)
     input_mask = ~(inputs == pad_token_id)
@@ -149,22 +153,18 @@ def load_pretraining_data(config: DataConfig, vocab: Vocabulary):
     training_ds = h5f["training"]
 
     validation_ds = h5f["validation"]
-    test_ds = h5f["test"]
 
     trainloader = DataLoader(training_ds, batch_size=config.pretraining_batch_size_train, shuffle=True, num_workers=2,
                              collate_fn=lambda batch: pretrain_prep_batch(batch, vocab, 
+                                                                          vocab.word_to_index[config.pretraining_label_mask_token],
                                                                           config.pretraining_mask_selection_prob,
                                                                           config.pretraining_mask_mask_prob,
                                                                           config.pretraining_mask_random_selection_prob))
     validloader = DataLoader(validation_ds, batch_size=config.pretraining_batch_size_eval, num_workers=2,
                              collate_fn=lambda batch: pretrain_prep_batch(batch, vocab, 
+                                                                          vocab.word_to_index[config.pretraining_label_mask_token],
                                                                           config.pretraining_mask_selection_prob,
                                                                           config.pretraining_mask_mask_prob,
                                                                           config.pretraining_mask_random_selection_prob))
-    testloader = DataLoader(test_ds, batch_size=config.pretraining_batch_size_eval, num_workers=2,
-                             collate_fn=lambda batch: pretrain_prep_batch(batch, vocab, 
-                                                                          config.pretraining_mask_selection_prob,
-                                                                          config.pretraining_mask_mask_prob,
-                                                                          config.pretraining_mask_random_selection_prob))
-    return trainloader, validloader, testloader
+    return trainloader, validloader
 

@@ -9,10 +9,11 @@ from training import finetuning, pretraining, finetune_evaluate
 from config import Config
 import re
 from submit import submit
+import torch._dynamo
+torch._dynamo.config.suppress_errors = True
 
 torch.set_printoptions(profile="full")
 torch.set_float32_matmul_precision('high')
-
 
 def init_argparser():
     parser = argparse.ArgumentParser(description="Transformer based semantic evaluation")
@@ -56,14 +57,18 @@ if __name__ == "__main__":
 
 
     if args.pretraining:
-        trainloader, validloader, testloader = load_pretraining_data(config.data_config, vocab)
+        trainloader, validloader = load_pretraining_data(config.data_config, vocab)
 
         model = PretrainModel(vocab.size(), config.model_config).to(config.device)
+        mask_token_id = vocab.word_to_index[vocab.mask_token]
+        label_mask_token_id=vocab.word_to_index[config.data_config.pretraining_label_mask_token]
         pretraining(config.pretraining_config, model, trainloader, validloader, 
-                    mask_token_id=vocab.word_to_index[vocab.mask_token], log_writer=writer, disable_tqdm=disable_tqdm)
+                    mask_token_id=mask_token_id, label_mask_token_id=label_mask_token_id,
+                    log_writer=writer, disable_tqdm=disable_tqdm)
 
     if args.finetune or args.interactive or args.submit or args.evaluate:
         model = SemEvalModel(vocab.size(), config.model_config).to(config.device)
+        model = torch.compile(model)
         if config.load_weights:
             model.load_state_dict(torch.load(config.load_weights_from, weights_only=True, map_location=torch.device(config.device)))
         elif config.load_pretrain_weights:
@@ -71,7 +76,6 @@ if __name__ == "__main__":
             pretrain_state_dict = {k: v for k, v in pretrain_state_dict.items() if not k.startswith('fc.')} # remove linear layer weights
             model.load_state_dict(pretrain_state_dict, strict=False)
 
-        model = torch.compile(model)
 
     if args.finetune:
         trainloader, evalloader = load_finetuning_data(config.data_config, vocab)

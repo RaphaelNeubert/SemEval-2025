@@ -91,8 +91,9 @@ def finetuning(config: TrainingConfig, model, trainloader, evalloader, label_set
     if print_test_evals is set to True, vocab is expected to be not None
     """
     device = config.device
-    unfroozen_params = model_freeze(model, config.unfreeze_count)
-    opt = torch.optim.Adam(unfroozen_params, lr=config.learning_rate)
+    #unfroozen_params = model_freeze(model, config.unfreeze_count)
+    #opt = torch.optim.Adam(unfroozen_params, lr=config.learning_rate)
+    opt = torch.optim.Adam(model.parameters(), lr=config.learning_rate)
     loss_fn = torch.nn.BCEWithLogitsLoss(pos_weight=torch.tensor([6.24, 7.73, 2.80, 3.19, 21.59], device=device)) # TODO config
     steps = 0
     loss_accu = 0
@@ -130,19 +131,19 @@ def finetuning(config: TrainingConfig, model, trainloader, evalloader, label_set
 
             steps += 1
 
-def pretrain_evaluate(model, evalloader, mask_token_id: int, disable_tqdm=False):
+def pretrain_evaluate(model, evalloader, mask_token_id: int, label_mask_token_id: int, disable_tqdm=False):
     device = next(model.parameters()).device
     model.eval()
 
     total_loss = 0
-    total_corr = 0
-    total_samples = 0
-    masked_correct = 0
-    masked_total = 0
+    total_corr = total_samples = 0 
+    masked_correct = masked_total = 0 
+    label_masked_correct = label_masked_total = 0
     for inputs, mask, targets in tqdm(evalloader, desc="evaluation", disable=disable_tqdm):
         inputs, mask, targets = inputs.to(device), mask.to(device), targets.to(device)
         with torch.no_grad():
             masked_tokens = (inputs ==  mask_token_id)
+            label_masked_tokens = (inputs ==  label_mask_token_id)
 
             preds = model(inputs, mask)
             loss = torch.nn.CrossEntropyLoss()(preds.view(-1,preds.shape[-1]), targets.view(-1))
@@ -156,13 +157,17 @@ def pretrain_evaluate(model, evalloader, mask_token_id: int, disable_tqdm=False)
             masked_correct += (preds[masked_tokens] == targets[masked_tokens]).sum().item()
             masked_total += masked_tokens.sum()
 
+            label_masked_correct += (preds[label_masked_tokens] == targets[label_masked_tokens]).sum().item()
+            label_masked_total += label_masked_tokens.sum()
+
     eval_loss = total_loss / len(evalloader)
     acc_total = total_corr / total_samples
-    acc_masked = masked_correct / masked_total if masked_total > 0 else 0
+    acc_mask = masked_correct / masked_total if masked_total > 0 else 0
+    acc_label_mask = label_masked_correct / label_masked_total if label_masked_total > 0 else 0
     model.train()
-    return eval_loss, acc_total, acc_masked
+    return eval_loss, acc_total, acc_mask, acc_label_mask
 
-def pretraining(config: TrainingConfig, model, trainloader, validloader, mask_token_id: int, log_writer=None, disable_tqdm=False):
+def pretraining(config: TrainingConfig, model, trainloader, validloader, mask_token_id: int, label_mask_token_id: int, log_writer=None, disable_tqdm=False):
     device = config.device
     opt = torch.optim.Adam(model.parameters(), lr=config.learning_rate)
     steps = 0
@@ -185,12 +190,13 @@ def pretraining(config: TrainingConfig, model, trainloader, validloader, mask_to
                 loss_accu = 0 
 
             if steps%config.eval_interval == 0:
-                eval_loss, eval_acc, eval_acc_masked = pretrain_evaluate(model, validloader, mask_token_id, disable_tqdm=disable_tqdm)
-                tqdm.write(f"eval_loss: {eval_loss:.4f}, acc: {eval_acc:.4f}, acc_masked: {eval_acc_masked:.4f}")
+                eval_loss, eval_acc, eval_acc_masked, eval_acc_label_masked = pretrain_evaluate(model, validloader, mask_token_id, label_mask_token_id, disable_tqdm=disable_tqdm)
+                tqdm.write(f"eval_loss: {eval_loss:.4f}, acc: {eval_acc:.4f}, acc_masked: {eval_acc_masked:.4f}, acc_label_masked: {eval_acc_label_masked:.4f}")
                 if log_writer is not None:
                     log_writer.add_scalar("preevaluation/loss", eval_loss, global_step=steps)
                     log_writer.add_scalar("preevaluation/accuracy", eval_acc, global_step=steps)
                     log_writer.add_scalar("preevaluation/accuracy_masked", eval_acc_masked, global_step=steps)
+                    log_writer.add_scalar("preevaluation/accuracy_label_mask", eval_acc_label_masked, global_step=steps)
 
             if steps%config.save_interval == 0:
                 if config.save_weights:
