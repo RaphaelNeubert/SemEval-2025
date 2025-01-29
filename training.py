@@ -15,6 +15,7 @@ class TrainingConfig:
     save_weights: bool = False
     save_weights_to: str = "./weights/weights.pth"
     unfreeze_count: int = 2    # pretraining only
+    loss_label_weights: tuple[float] = (1,1,1,1,1)
 
 def print_preds_batch(inputs, pred_classes, targets, vocab, writer=None, step=0):
     class_labels = ["anger", "fear", "joy", "sadness", "suprise"]
@@ -94,7 +95,7 @@ def finetuning(config: TrainingConfig, model, trainloader, evalloader, label_set
     #unfroozen_params = model_freeze(model, config.unfreeze_count)
     #opt = torch.optim.Adam(unfroozen_params, lr=config.learning_rate)
     opt = torch.optim.Adam(model.parameters(), lr=config.learning_rate)
-    loss_fn = torch.nn.BCEWithLogitsLoss(pos_weight=torch.tensor([6.24, 7.73, 2.80, 3.19, 21.59], device=device)) # TODO config
+    loss_fn = torch.nn.BCEWithLogitsLoss(pos_weight=torch.tensor(config.loss_label_weights, device=device)) # TODO config
     steps = 0
     loss_accu = 0
     for epoch in range(config.num_epochs):

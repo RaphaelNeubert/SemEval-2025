@@ -5,3 +5,4 @@ weights
 flake.*
 .direnv
 .ipynb_checkpoints/
+evaluate_submission.py
