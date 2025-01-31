@@ -18,7 +18,7 @@ class TrainingConfig:
     loss_label_weights: tuple[float] = (1,1,1,1,1)
 
 def print_preds_batch(inputs, pred_classes, targets, vocab, writer=None, step=0):
-    class_labels = ["anger", "fear", "joy", "sadness", "suprise"]
+    class_labels = ["admiration","amusement","anger","annoyance","approval","caring","confusion","curiosity","desire","disappointment","disapproval","disgust","embarrassment","excitement","fear","gratitude","grief","joy","love","nervousness","optimism","pride","realization","relief","remorse","sadness","surprise","neutral"]
     text = ""
     for src, classes, target in zip(inputs, pred_classes, targets):
         input_indices = src[~(src == torch.tensor(vocab.words_to_indices([vocab.pad_token]), device=src.device))]
@@ -40,7 +40,10 @@ def finetune_evaluate(model, dataloader, label_set_thresholds, print_test_evals=
     model.eval()
     device = next(model.parameters()).device
     total_loss, total_corr, total_samples = 0, 0, 0
-    true_positives, false_positives, false_negatives = 0, 0, 0
+    tp, fp, fn = 0, 0, 0
+    tp_5, fp_5, fn_5 = 0, 0, 0  # For selected 5 labels
+    target_indices = [2, 14, 17, 25, 26]  # Indices for anger, fear, joy, sadness, surprise
+
     with torch.no_grad():
         for i, (inputs, mask, targets) in enumerate(tqdm(dataloader, disable=disable_tqdm)):
             inputs, mask, targets = inputs.to(device), mask.to(device), targets.to(device)
@@ -53,9 +56,13 @@ def finetune_evaluate(model, dataloader, label_set_thresholds, print_test_evals=
             total_corr += (pred_classes == targets).all(dim=-1).sum().item()
             total_samples += targets.size(0)
 
-            true_positives += ((pred_classes == 1) & (targets == 1)).sum().item()
-            false_positives += ((pred_classes == 1) & (targets == 0)).sum().item()
-            false_negatives += ((pred_classes == 0) & (targets == 1)).sum().item()
+            tp += ((pred_classes == 1) & (targets == 1)).sum().item()
+            fp += ((pred_classes == 1) & (targets == 0)).sum().item()
+            fn += ((pred_classes == 0) & (targets == 1)).sum().item()
+
+            tp_5 += ((pred_classes[:, target_indices] == 1) & (targets[:, target_indices] == 1)).sum().item()
+            fp_5 += ((pred_classes[:, target_indices] == 1) & (targets[:, target_indices] == 0)).sum().item()
+            fn_5 += ((pred_classes[:, target_indices] == 0) & (targets[:, target_indices] == 1)).sum().item()
 
             if print_test_evals and i == 0:
                 print_preds_batch(inputs, pred_classes, targets, vocab, writer, step)
@@ -63,20 +70,23 @@ def finetune_evaluate(model, dataloader, label_set_thresholds, print_test_evals=
     eval_loss = total_loss / len(dataloader)
     acc = total_corr / total_samples
 
-    precision = true_positives / (true_positives + false_positives) if (true_positives + false_positives) > 0 else 0
-    recall = true_positives / (true_positives + false_negatives) if (true_positives + false_negatives) > 0 else 0
+    precision = tp / (tp + fp) if (tp + fp) > 0 else 0
+    recall = tp / (tp + fn) if (tp + fn) > 0 else 0
     f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0
 
+    precision_5 = tp_5 / (tp_5 + fp_5) if (tp_5 + fp_5) > 0 else 0
+    recall_5 = tp_5 / (tp_5 + fn_5) if (tp_5 + fn_5) > 0 else 0
+    f1_5 = 2 * precision_5 * recall_5 / (precision_5 + recall_5) if (precision_5 + recall_5) > 0 else 0
 
     model.train()
-    return eval_loss, acc, precision, recall, f1
+    return eval_loss, acc, precision, recall, f1, f1_5
 
 
 def model_freeze(model, unfreeze_count: int):
     unfroozen_params = []
     for p in model.parameters():
         p.requires_grad = False
-    for l in model.encoder.enc_layers[:-unfreeze_count]:
+    for l in model.encoder.enc_layers[-unfreeze_count:]:
         for p in l.parameters():
             p.requires_grad = True
             unfroozen_params.append(p)
@@ -92,10 +102,10 @@ def finetuning(config: TrainingConfig, model, trainloader, evalloader, label_set
     if print_test_evals is set to True, vocab is expected to be not None
     """
     device = config.device
-    #unfroozen_params = model_freeze(model, config.unfreeze_count)
+    unfroozen_params = model_freeze(model, config.unfreeze_count)
     #opt = torch.optim.Adam(unfroozen_params, lr=config.learning_rate)
     opt = torch.optim.Adam(model.parameters(), lr=config.learning_rate)
-    loss_fn = torch.nn.BCEWithLogitsLoss(pos_weight=torch.tensor(config.loss_label_weights, device=device)) # TODO config
+    loss_fn = torch.nn.BCEWithLogitsLoss(pos_weight=torch.tensor(config.loss_label_weights, device=device))
     steps = 0
     loss_accu = 0
     for epoch in range(config.num_epochs):
@@ -116,15 +126,16 @@ def finetuning(config: TrainingConfig, model, trainloader, evalloader, label_set
                 loss_accu = 0 
 
             if steps%config.eval_interval == 0:
-                eval_loss, eval_acc, precision, recall, f1 = finetune_evaluate(model, evalloader, label_set_thresholds, print_test_evals=print_test_evals,
-                                                                               vocab=vocab, writer=log_writer, step=steps, disable_tqdm=disable_tqdm)
-                tqdm.write(f"eval_loss: {eval_loss:.4f}, acc: {eval_acc:.4f}, precision: {precision:.4f}, recall: {recall:.4f}, f1_score: {f1:.4f}")
+                eval_loss, eval_acc, precision, recall, f1, f1_5 = finetune_evaluate(model, evalloader, label_set_thresholds, print_test_evals=print_test_evals,
+                                                                                     vocab=vocab, writer=log_writer, step=steps, disable_tqdm=disable_tqdm)
+                tqdm.write(f"eval_loss: {eval_loss:.4f}, acc: {eval_acc:.4f}, precision: {precision:.4f}, recall: {recall:.4f}, f1_score: {f1:.4f}, f1_5_score: {f1_5:.4f}")
                 if log_writer is not None:
                     log_writer.add_scalar("evaluation/loss", eval_loss, global_step=steps)
                     log_writer.add_scalar("evaluation/accuracy", eval_acc, global_step=steps)
                     log_writer.add_scalar("evaluation/precision", precision, global_step=steps)
                     log_writer.add_scalar("evaluation/recall", recall, global_step=steps)
                     log_writer.add_scalar("evaluation/f1", f1, global_step=steps)
+                    log_writer.add_scalar("evaluation/f1_5", f1_5, global_step=steps)
 
             if steps%config.save_interval == 0:
                 if config.save_weights:

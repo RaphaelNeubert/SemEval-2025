@@ -9,43 +9,38 @@ import torch
 @dataclass
 class Config:
     load_weights: bool = False
-    load_weights_from: str = "./weights/weights-fine-31000.pth"
+    load_weights_from: str = "./weights/weights-pre-fine-goemo2-13000.pth"
 
-    load_pretrain_weights: bool = False
+    load_pretrain_weights: bool = True
     load_pretrain_weights_from: str = "./weights/pretrain_weights-490000.pth"
 
     device: str = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     #device: str = "cpu"
     #                           Anger     Fear      Joy      Sadness   Surprise
     #label_set_thresholds = [ 0.160263, 0.129352, 0.357197, 0.313231, 0.046307]
-    label_set_thresholds = [0.5]*5
+    label_set_thresholds = [0.5]*28
 
     model_config = ModelConfig(
-        num_classes = 5,
+        num_classes = 28,
         dim_embeddings = 768,
         num_heads = 12,
         num_encoder_layers = 12,
-        dropout = 0.1
+        dropout = 0.3
     )
-    #model_config = ModelConfig(
-    #    num_classes = 5,
-    #    dim_embeddings = 64,
-    #    num_heads = 4,
-    #    num_encoder_layers = 2,
-    #    dropout = 0.3
-    #)
     finetune_config = TrainingConfig(
         device = device,
-        learning_rate = 0.0001,
+        learning_rate = 0.00001,
         num_epochs = 200,
         log_interval = 100,           # Log training loss every log_interval steps
-        eval_interval = 100,         # Evaluate the model every eval_interval steps
-        save_interval = 200,         # Save weights every save_interval steps
+        eval_interval = 200,         # Evaluate the model every eval_interval steps
+        save_interval = 500,         # Save weights every save_interval steps
         save_weights = True,
-        save_weights_to = "./weights/weights-pre-fine-orig-<training_step>.pth", # <training_step> placeholder will be replaced
-        unfreeze_count = model_config.num_encoder_layers,
+        save_weights_to = "./weights/weights-pre-fine-goemo-<training_step>.pth", # <training_step> placeholder will be replaced
+        unfreeze_count = 4,
         #loss_label_weights = (6.24, 7.73, 2.80, 3.19, 21.59)
-        loss_label_weights = (2.01, 0.41, 0.99, 0.76, 0.80)
+        #loss_label_weights = (2.01, 0.41, 0.99, 0.76, 0.80)
+        loss_label_weights = (1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 2, 2, 1)
+
 
     )
     pretraining_config = TrainingConfig(
