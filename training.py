@@ -2,6 +2,7 @@ import torch
 import torch.nn.functional as F
 from tqdm import tqdm
 from dataclasses import dataclass
+from torch.optim.lr_scheduler import LinearLR, CosineAnnealingLR
 
 
 @dataclass
@@ -76,7 +77,7 @@ def model_freeze(model, unfreeze_count: int):
     unfroozen_params = []
     for p in model.parameters():
         p.requires_grad = False
-    for l in model.encoder.enc_layers[:-unfreeze_count]:
+    for l in model.encoder.enc_layers[-unfreeze_count:]:
         for p in l.parameters():
             p.requires_grad = True
             unfroozen_params.append(p)
@@ -92,10 +93,11 @@ def finetuning(config: TrainingConfig, model, trainloader, evalloader, label_set
     if print_test_evals is set to True, vocab is expected to be not None
     """
     device = config.device
-    #unfroozen_params = model_freeze(model, config.unfreeze_count)
-    #opt = torch.optim.Adam(unfroozen_params, lr=config.learning_rate)
-    opt = torch.optim.Adam(model.parameters(), lr=config.learning_rate)
-    loss_fn = torch.nn.BCEWithLogitsLoss(pos_weight=torch.tensor(config.loss_label_weights, device=device)) # TODO config
+    unfroozen_params = model_freeze(model, config.unfreeze_count)
+    opt = torch.optim.AdamW(unfroozen_params, lr=config.learning_rate)
+    #opt = torch.optim.AdamW(model.parameters(), lr=config.learning_rate)
+    loss_fn = torch.nn.BCEWithLogitsLoss(pos_weight=torch.tensor(config.loss_label_weights, device=device))
+    lr_scheduler = LinearLR(opt, 1, 0.1, total_iters=10)
     steps = 0
     loss_accu = 0
     for epoch in range(config.num_epochs):
@@ -131,6 +133,8 @@ def finetuning(config: TrainingConfig, model, trainloader, evalloader, label_set
                     torch.save(model.state_dict(), config.save_weights_to.replace("<training_step>", f"{steps}"))
 
             steps += 1
+        lr_scheduler.step()
+        print(lr_scheduler.get_last_lr())
 
 def pretrain_evaluate(model, evalloader, mask_token_id: int, label_mask_token_id: int, disable_tqdm=False):
     device = next(model.parameters()).device

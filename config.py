@@ -8,16 +8,16 @@ import torch
 
 @dataclass
 class Config:
-    load_weights: bool = False
-    load_weights_from: str = "./weights/weights-fine-31000.pth"
+    load_weights: bool = True
+    load_weights_from: str = "./weights/weights-pre-fine-orig-4000.pth"
 
-    load_pretrain_weights: bool = False
+    load_pretrain_weights: bool = True
     load_pretrain_weights_from: str = "./weights/pretrain_weights-490000.pth"
 
     device: str = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     #device: str = "cpu"
     #                           Anger     Fear      Joy      Sadness   Surprise
-    #label_set_thresholds = [ 0.160263, 0.129352, 0.357197, 0.313231, 0.046307]
+    #label_set_thresholds = [0.6, 0.3, 0.2, 0.4, 0.2]
     label_set_thresholds = [0.5]*5
 
     model_config = ModelConfig(
@@ -25,27 +25,29 @@ class Config:
         dim_embeddings = 768,
         num_heads = 12,
         num_encoder_layers = 12,
-        dropout = 0.1
+        dropout = 0.4
     )
     #model_config = ModelConfig(
     #    num_classes = 5,
-    #    dim_embeddings = 64,
+    #    dim_embeddings = 256,
     #    num_heads = 4,
-    #    num_encoder_layers = 2,
-    #    dropout = 0.3
+    #    num_encoder_layers = 4,
+    #    dropout = 0.4
     #)
     finetune_config = TrainingConfig(
         device = device,
         learning_rate = 0.0001,
-        num_epochs = 200,
+        num_epochs = 20,
         log_interval = 100,           # Log training loss every log_interval steps
-        eval_interval = 100,         # Evaluate the model every eval_interval steps
+        eval_interval = 277,         # Evaluate the model every eval_interval steps
         save_interval = 200,         # Save weights every save_interval steps
         save_weights = True,
         save_weights_to = "./weights/weights-pre-fine-orig-<training_step>.pth", # <training_step> placeholder will be replaced
-        unfreeze_count = model_config.num_encoder_layers,
+        unfreeze_count = 4,
         #loss_label_weights = (6.24, 7.73, 2.80, 3.19, 21.59)
-        loss_label_weights = (2.01, 0.41, 0.99, 0.76, 0.80)
+        #loss_label_weights = (2.01, 0.41, 0.99, 0.76, 0.80)
+        loss_label_weights = (7.312312, 0.718187, 3.106825, 2.152620, 2.299166)
+        #loss_label_weights = (1,1,1,1,1)
 
     )
     pretraining_config = TrainingConfig(
@@ -59,7 +61,7 @@ class Config:
         save_weights_to = "./weights/pretrain_weights-<training_step>.pth", # <training_step> placeholder will be replaced
     )
     data_config = DataConfig(
-        finetuning_h5_path = "data/finetuning_split_goemotion.h5",
+        finetuning_h5_path = "data/finetuning_split_orig.h5",
         pretraining_h5_path="data/sentiment140.h5",
         pretraining_mask_selection_prob=0.1,
         pretraining_mask_mask_prob=0.8,
@@ -71,9 +73,9 @@ class Config:
         vocab_size=30000,
         pretraining_batch_size_train=512,
         pretraining_batch_size_eval=512,
-        finetune_batch_size_train=64,
-        finetune_batch_size_eval=64,
-        finetune_batch_size_test=64,
+        finetune_batch_size_train=8,
+        finetune_batch_size_eval=128,
+        finetune_batch_size_test=32,
         pretraining_mask_token="<MASK>",
         pretraining_label_mask_token="<LABEL_MASK>",
         pad_token="<PAD>",
