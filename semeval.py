@@ -68,7 +68,7 @@ if __name__ == "__main__":
 
     if args.finetune or args.interactive or args.submit or args.evaluate:
         model = SemEvalModel(vocab.size(), config.model_config).to(config.device)
-        model = torch.compile(model)
+        #model = torch.compile(model)
         if config.load_weights:
             model.load_state_dict(torch.load(config.load_weights_from, weights_only=True, map_location=torch.device(config.device)))
         elif config.load_pretrain_weights:

@@ -103,8 +103,8 @@ def finetuning(config: TrainingConfig, model, trainloader, evalloader, label_set
     """
     device = config.device
     unfroozen_params = model_freeze(model, config.unfreeze_count)
-    #opt = torch.optim.Adam(unfroozen_params, lr=config.learning_rate)
-    opt = torch.optim.Adam(model.parameters(), lr=config.learning_rate)
+    opt = torch.optim.Adam(unfroozen_params, lr=config.learning_rate)
+    #opt = torch.optim.Adam(model.parameters(), lr=config.learning_rate)
     loss_fn = torch.nn.BCEWithLogitsLoss(pos_weight=torch.tensor(config.loss_label_weights, device=device))
     steps = 0
     loss_accu = 0

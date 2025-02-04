@@ -30,7 +30,7 @@ class Config:
     finetune_config = TrainingConfig(
         device = device,
         learning_rate = 0.00001,
-        num_epochs = 200,
+        num_epochs = 50,
         log_interval = 100,           # Log training loss every log_interval steps
         eval_interval = 200,         # Evaluate the model every eval_interval steps
         save_interval = 500,         # Save weights every save_interval steps
@@ -39,7 +39,10 @@ class Config:
         unfreeze_count = 4,
         #loss_label_weights = (6.24, 7.73, 2.80, 3.19, 21.59)
         #loss_label_weights = (2.01, 0.41, 0.99, 0.76, 0.80)
-        loss_label_weights = (1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 2, 2, 1)
+        loss_label_weights = (1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1)
+        #loss_label_weights = (9.538843, 17.841435, 26.669688, 16.504301, 13.844073, 38.964812, 31.108481, 18.732121, 66.454420, 33.392254,
+        #                      20.335518, 52.315502, 142.638235, 50.084728, 71.458457, 15.203384, 587.397590, 29.277123, 20.014200, 260.160428, 
+        #                      26.638370, 383.543307, 37.913944, 296.786585, 80.259567, 31.953441, 39.663614, 2.051168)
 
 
     )
