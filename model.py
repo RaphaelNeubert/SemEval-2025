@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from dataclasses import dataclass
+from transformers import RobertaModel
 
 
 @dataclass
@@ -133,6 +134,20 @@ class SemEvalModel(nn.Module):
         x = self.positional_encoding(x)
         enc_out = self.encoder(x, mask=mask)
         out = self.fc(enc_out[:,0,:])
+        return out
+
+class SemEvalBertModel(nn.Module):
+    def __init__(self, config: ModelConfig):
+        super().__init__()
+        self.roberta = RobertaModel.from_pretrained("roberta-base")
+        self.dropout = nn.Dropout(config.dropout)
+        self.fc = nn.Linear(self.roberta.config.hidden_size, config.num_classes)
+
+    def forward(self, x, mask=None):
+        out = self.roberta(input_ids=x, attention_mask=mask)
+        out = out.last_hidden_state[:, 0, :]
+        out = self.dropout(out)
+        out = self.fc(out)
         return out
 
 class PretrainModel(nn.Module):

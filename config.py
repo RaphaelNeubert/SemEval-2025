@@ -8,8 +8,8 @@ import torch
 
 @dataclass
 class Config:
-    load_weights: bool = False
-    load_weights_from: str = "./weights/weights-pre-fine-orig-1600.pth"
+    load_weights: bool = True
+    load_weights_from: str = "./weights/weights-pre-fine-orig-834.pth"
 
     load_pretrain_weights: bool = False
     #load_pretrain_weights_from: str = "./weights/pretrain_weights-490000.pth"
@@ -36,11 +36,11 @@ class Config:
     #)
     finetune_config = TrainingConfig(
         device = device,
-        learning_rate = 0.0001,
+        learning_rate = 0.00001,
         num_epochs = 40,
         log_interval = 100,           # Log training loss every log_interval steps
-        eval_interval = 277,         # Evaluate the model every eval_interval steps
-        save_interval = 200,         # Save weights every save_interval steps
+        eval_interval = 139,         # Evaluate the model every eval_interval steps
+        save_interval = 139,         # Save weights every save_interval steps
         save_weights = True,
         save_weights_to = "./weights/weights-pre-fine-orig-<training_step>.pth", # <training_step> placeholder will be replaced
         unfreeze_count = 2,
@@ -52,7 +52,7 @@ class Config:
     )
     pretraining_config = TrainingConfig(
         device = device,
-        learning_rate = 0.00005,
+        learning_rate = 0.00001,
         num_epochs = 20000,
         log_interval = 100,           # Log training loss every log_interval steps
         eval_interval = 500,         # Evaluate the model every eval_interval steps

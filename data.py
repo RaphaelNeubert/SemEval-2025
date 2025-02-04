@@ -88,20 +88,21 @@ class Vocabulary:
             print(self.index_to_words(indices))
 
 
-def finetune_prep_batch(batch):
+def finetune_prep_batch(batch, padding_token_id: int):
     inputs = [torch.tensor(x["feature"]) for x in batch]
     targets = torch.tensor(np.array([x["label"] for x in batch]))
-    inputs_padded = pad_sequence(inputs, batch_first=True, padding_value=0)  # corresponds to <PAD>
-    mask = ~(inputs_padded == 0)
+    inputs_padded = pad_sequence(inputs, batch_first=True, padding_value=padding_token_id)  # corresponds to <PAD>
+    mask = ~(inputs_padded == padding_token_id)
     return inputs_padded, mask, targets
 
-def load_finetuning_data(config: DataConfig, vocab: Vocabulary):
+def load_finetuning_data(config: DataConfig, tokenizer):
     h5f = h5py.File(config.finetuning_h5_path, "r")
     training_ds = h5f["training"]
     validation_ds = h5f["validation"]
+    padding_token_id = tokenizer.pad_token_id
 
-    trainloader = DataLoader(training_ds, batch_size=config.finetune_batch_size_train, collate_fn=finetune_prep_batch, shuffle=True)
-    validloader = DataLoader(validation_ds, batch_size=config.finetune_batch_size_eval, collate_fn=finetune_prep_batch, shuffle=True)
+    trainloader = DataLoader(training_ds, batch_size=config.finetune_batch_size_train, collate_fn=lambda batch: finetune_prep_batch(batch, padding_token_id), shuffle=True)
+    validloader = DataLoader(validation_ds, batch_size=config.finetune_batch_size_eval, collate_fn=lambda batch: finetune_prep_batch(batch, padding_token_id), shuffle=True)
 
     return trainloader, validloader
 
