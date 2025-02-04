@@ -17,7 +17,9 @@ def submit(model, tokenizer, label_set_thresholds):
         indices = torch.tensor(tokenizer.encode(sentence), device=device).unsqueeze(0)
         pred = torch.sigmoid(model(indices).squeeze())
         pred_classes = (pred > torch.tensor(label_set_thresholds, device=device)).to("cpu")
-        for emo, label in zip(emotions, pred_classes):
+        #print(sentence, pred[[2, 14, 17, 25, 26]])
+        #breakpoint()
+        for emo, label in zip(emotions, pred_classes[[2, 14, 17, 25, 26]]):
             #print(label)
             df.loc[i, emo] = int(label.item())
     df[emotions] = df[emotions].astype(int)

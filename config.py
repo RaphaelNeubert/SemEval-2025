@@ -18,10 +18,10 @@ class Config:
     #device: str = "cpu"
     #                           Anger     Fear      Joy      Sadness   Surprise
     #label_set_thresholds = [0.7, 0.2, 0.7, 0.8, 0.3]
-    label_set_thresholds = [0.5]*5
+    label_set_thresholds = [0.5]*28
 
     model_config = ModelConfig(
-        num_classes = 5,
+        num_classes = 28,
         dim_embeddings = 768,
         num_heads = 12,
         num_encoder_layers = 12,
@@ -44,10 +44,7 @@ class Config:
         save_weights = True,
         save_weights_to = "./weights/weights-pre-fine-orig-<training_step>.pth", # <training_step> placeholder will be replaced
         unfreeze_count = 4,
-        #loss_label_weights = (6.24, 7.73, 2.80, 3.19, 21.59)
-        #loss_label_weights = (2.01, 0.41, 0.99, 0.76, 0.80)
-        loss_label_weights = (7.312312, 0.718187, 3.106825, 2.152620, 2.299166)
-        #loss_label_weights = (1,1,1,1,1)
+        loss_label_weights = (1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1)
 
     )
     pretraining_config = TrainingConfig(
@@ -61,7 +58,7 @@ class Config:
         save_weights_to = "./weights/pretrain_weights-<training_step>.pth", # <training_step> placeholder will be replaced
     )
     data_config = DataConfig(
-        finetuning_h5_path = "data/finetuning_split_orig.h5",
+        finetuning_h5_path = "data/finetuning_split_goemotion_bert.h5",
         pretraining_h5_path="data/sentiment140.h5",
         pretraining_mask_selection_prob=0.1,
         pretraining_mask_mask_prob=0.8,
