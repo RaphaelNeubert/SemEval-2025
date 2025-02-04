@@ -92,7 +92,7 @@ if __name__ == "__main__":
             f1_scores = []
             values = np.arange(0.1, 1, 0.1)
             #thresholds = [0.5]*5
-            thresholds = [0.8, 0.1, 0.8, 0.4, 0.4]
+            thresholds = [0.8, 0.1, 0.8, 0.4, 0.3]
             for x in values:
                 thresholds[i] = x
                 print("x: ", x)

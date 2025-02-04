@@ -97,7 +97,7 @@ def finetuning(config: TrainingConfig, model, trainloader, evalloader, label_set
     opt = torch.optim.AdamW(unfroozen_params, lr=config.learning_rate)
     #opt = torch.optim.AdamW(model.parameters(), lr=config.learning_rate)
     loss_fn = torch.nn.BCEWithLogitsLoss(pos_weight=torch.tensor(config.loss_label_weights, device=device))
-    lr_scheduler = LinearLR(opt, 1, 0.1, total_iters=10)
+    #lr_scheduler = LinearLR(opt, 1, 0.1, total_iters=20)
     steps = 0
     loss_accu = 0
     for epoch in range(config.num_epochs):
@@ -133,8 +133,8 @@ def finetuning(config: TrainingConfig, model, trainloader, evalloader, label_set
                     torch.save(model.state_dict(), config.save_weights_to.replace("<training_step>", f"{steps}"))
 
             steps += 1
-        lr_scheduler.step()
-        print(lr_scheduler.get_last_lr())
+        #lr_scheduler.step()
+        #print(lr_scheduler.get_last_lr())
 
 def pretrain_evaluate(model, evalloader, mask_token_id: int, label_mask_token_id: int, disable_tqdm=False):
     device = next(model.parameters()).device
