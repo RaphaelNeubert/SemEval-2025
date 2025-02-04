@@ -17,7 +17,7 @@ class Config:
     device: str = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     #device: str = "cpu"
     #                           Anger     Fear      Joy      Sadness   Surprise
-    #label_set_thresholds = [0.8, 0.1, 0.8, 0.4, 0.3]
+    #label_set_thresholds = [0.7, 0.2, 0.7, 0.8, 0.3]
     label_set_thresholds = [0.5]*5
 
     model_config = ModelConfig(
