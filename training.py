@@ -77,7 +77,7 @@ def model_freeze(model, unfreeze_count: int):
     unfroozen_params = []
     for p in model.parameters():
         p.requires_grad = False
-    for l in model.encoder.enc_layers[-unfreeze_count:]:
+    for l in model.roberta.encoder.layer[-unfreeze_count:]:
         for p in l.parameters():
             p.requires_grad = True
             unfroozen_params.append(p)
@@ -93,9 +93,9 @@ def finetuning(config: TrainingConfig, model, trainloader, evalloader, label_set
     if print_test_evals is set to True, tokenizer is expected to be not None
     """
     device = config.device
-    #unfroozen_params = model_freeze(model, config.unfreeze_count)
-    #opt = torch.optim.AdamW(unfroozen_params, lr=config.learning_rate)
-    opt = torch.optim.AdamW(model.parameters(), lr=config.learning_rate)
+    unfroozen_params = model_freeze(model, config.unfreeze_count)
+    opt = torch.optim.AdamW(unfroozen_params, lr=config.learning_rate)
+    #opt = torch.optim.AdamW(model.parameters(), lr=config.learning_rate)
     loss_fn = torch.nn.BCEWithLogitsLoss(pos_weight=torch.tensor(config.loss_label_weights, device=device))
     #lr_scheduler = LinearLR(opt, 1, 0.1, total_iters=20)
     steps = 0
