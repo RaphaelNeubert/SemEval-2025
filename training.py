@@ -129,9 +129,9 @@ def finetuning(config: TrainingConfig, model, trainloader, evalloader, label_set
                 loss_accu = 0 
 
             if steps%config.eval_interval == 0:
-                eval_loss, eval_acc, precision, recall, f1 = finetune_evaluate(model, evalloader, label_set_thresholds, print_test_evals=print_test_evals,
-                                                                               tokenizer=tokenizer, writer=log_writer, step=steps, disable_tqdm=disable_tqdm)
-                tqdm.write(f"eval_loss: {eval_loss:.4f}, acc: {eval_acc:.4f}, precision: {precision:.4f}, recall: {recall:.4f}, f1_score: {f1:.4f}")
+                eval_loss, eval_acc, precision, recall, f1, f1_5 = finetune_evaluate(model, evalloader, label_set_thresholds, print_test_evals=print_test_evals,
+                                                                                     tokenizer=tokenizer, writer=log_writer, step=steps, disable_tqdm=disable_tqdm)
+                tqdm.write(f"eval_loss: {eval_loss:.4f}, acc: {eval_acc:.4f}, precision: {precision:.4f}, recall: {recall:.4f}, f1_score: {f1:.4f}, f1_5_score: {f1_5:.4f}")
                 if log_writer is not None:
                     log_writer.add_scalar("evaluation/loss", eval_loss, global_step=steps)
                     log_writer.add_scalar("evaluation/accuracy", eval_acc, global_step=steps)

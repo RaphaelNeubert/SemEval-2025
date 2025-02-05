@@ -36,13 +36,13 @@ class Config:
     #)
     finetune_config = TrainingConfig(
         device = device,
-        learning_rate = 0.00001,
+        learning_rate = 0.00002,
         num_epochs = 40,
         log_interval = 100,           # Log training loss every log_interval steps
-        eval_interval = 139,         # Evaluate the model every eval_interval steps
-        save_interval = 139,         # Save weights every save_interval steps
+        eval_interval = 200,         # Evaluate the model every eval_interval steps
+        save_interval = 400,         # Save weights every save_interval steps
         save_weights = True,
-        save_weights_to = "./weights/weights-pre-fine-orig-<training_step>.pth", # <training_step> placeholder will be replaced
+        save_weights_to = "./weights/weights-pre-goemotion-<training_step>.pth", # <training_step> placeholder will be replaced
         unfreeze_count = 4,
         loss_label_weights = (1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1)
 
@@ -70,8 +70,8 @@ class Config:
         vocab_size=30000,
         pretraining_batch_size_train=512,
         pretraining_batch_size_eval=512,
-        finetune_batch_size_train=16,
-        finetune_batch_size_eval=128,
+        finetune_batch_size_train=64,
+        finetune_batch_size_eval=64,
         finetune_batch_size_test=32,
         pretraining_mask_token="<MASK>",
         pretraining_label_mask_token="<LABEL_MASK>",
