@@ -46,12 +46,14 @@ if __name__ == "__main__":
         model = SemEvalBertModel(config.model_config).to(config.device)
    #     #model = torch.compile(model)
         if config.load_weights:
+            print("loading weights")
             model.load_state_dict(torch.load(config.load_weights_from, weights_only=True, map_location=torch.device(config.device)))
 
-   #     elif config.load_pretrain_weights:
-   #         pretrain_state_dict = torch.load(config.load_pretrain_weights_from, weights_only=True, map_location=torch.device(config.device))
-   #         pretrain_state_dict = {k: v for k, v in pretrain_state_dict.items() if not k.startswith('fc.')} # remove linear layer weights
-   #         model.load_state_dict(pretrain_state_dict, strict=False)
+        elif config.load_pretrain_weights:
+            print("loading pretrain weights")
+            pretrain_state_dict = torch.load(config.load_pretrain_weights_from, weights_only=True, map_location=torch.device(config.device))
+            pretrain_state_dict = {k: v for k, v in pretrain_state_dict.items() if not k.startswith('fc.')} # remove linear layer weights
+            model.load_state_dict(pretrain_state_dict, strict=False)
 
     if args.finetune:
         trainloader, evalloader = load_finetuning_data(config.data_config, tokenizer)
@@ -68,7 +70,7 @@ if __name__ == "__main__":
             f1_scores = []
             values = np.arange(0.1, 1, 0.1)
             #thresholds = [0.5]*5
-            thresholds = [0.7, 0.2, 0.7, 0.8, 0.3]
+            thresholds = [0.7, 0.3, 0.8, 0.7, 0.5]
             for x in values:
                 thresholds[i] = x
                 print("x: ", x)
