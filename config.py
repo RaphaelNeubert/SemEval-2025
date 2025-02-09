@@ -8,12 +8,12 @@ import torch
 
 @dataclass
 class Config:
-    load_weights: bool = True
+    load_weights: bool = False
     load_weights_from: str = "./weights/self-pretrained-finetuned.pth"
 
     load_pretrain_weights: bool = True
     #load_pretrain_weights_from: str = "./weights/pretrain_weights-490000.pth"
-    load_pretrain_weights_from: str = "./weights/pretrain_weights-v2.pth"
+    load_pretrain_weights_from: str = "./weights/pre-goemotion.pth"
     device: str = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     #device: str = "cpu"
     #                           Anger     Fear      Joy      Sadness   Surprise
@@ -43,7 +43,7 @@ class Config:
         save_interval = 139,         # Save weights every save_interval steps
         save_weights = True,
         save_weights_to = "./weights/weights-pre-emo-fine-orig-<training_step>.pth", # <training_step> placeholder will be replaced
-        unfreeze_count = 4,
+        unfreeze_count = 2,
         #loss_label_weights = (6.24, 7.73, 2.80, 3.19, 21.59)
         #loss_label_weights = (2.01, 0.41, 0.99, 0.76, 0.80)
         loss_label_weights = (7.312312, 0.718187, 3.106825, 2.152620, 2.299166)
