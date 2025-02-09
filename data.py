@@ -152,7 +152,7 @@ def load_pretraining_data(config: DataConfig, tokenizer):
 
     validation_ds = h5f["validation"]
 
-    trainloader = DataLoader(training_ds[:10000], batch_size=config.pretraining_batch_size_train, shuffle=True, num_workers=0,
+    trainloader = DataLoader(training_ds, batch_size=config.pretraining_batch_size_train, shuffle=True, num_workers=0,
                              collate_fn=lambda batch: pretrain_prep_batch(batch,
                                                                           tokenizer.encode("<LABEL_MASK>")[1], # <s> tok <\s>
                                                                           tokenizer.pad_token_id,
@@ -161,7 +161,7 @@ def load_pretraining_data(config: DataConfig, tokenizer):
                                                                           config.pretraining_mask_selection_prob,
                                                                           config.pretraining_mask_mask_prob,
                                                                           config.pretraining_mask_random_selection_prob))
-    validloader = DataLoader(validation_ds[:10000], batch_size=config.pretraining_batch_size_eval, num_workers=0,
+    validloader = DataLoader(validation_ds, batch_size=config.pretraining_batch_size_eval, num_workers=0,
                              collate_fn=lambda batch: pretrain_prep_batch(batch,
                                                                           tokenizer.encode("<LABEL_MASK>")[1], # <s> tok <\s>
                                                                           tokenizer.pad_token_id,
