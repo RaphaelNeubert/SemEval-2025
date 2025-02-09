@@ -40,7 +40,17 @@ if __name__ == "__main__":
     disable_tqdm = not args.enable_tqdm
 
 
-    tokenizer = AutoTokenizer.from_pretrained("roberta-base")
+    tokenizer = AutoTokenizer.from_pretrained("data")
+    print(tokenizer.vocab_size)
+    if args.pretraining:
+        trainloader, validloader = load_pretraining_data(config.data_config, tokenizer)
+
+        model = PretrainModel(len(tokenizer), config.model_config).to(config.device)
+        mask_token_id = tokenizer.mask_token_id
+        label_mask_token_id=tokenizer.encode("<LABEL_MASK>")[1] # <s> tok </s>
+        pretraining(config.pretraining_config, model, trainloader, validloader, 
+                    mask_token_id=mask_token_id, label_mask_token_id=label_mask_token_id,
+                    log_writer=writer, disable_tqdm=disable_tqdm)
 
     if args.finetune or args.interactive or args.submit or args.evaluate:
         model = SemEvalBertModel(config.model_config).to(config.device)

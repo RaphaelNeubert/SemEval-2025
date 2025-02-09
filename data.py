@@ -119,11 +119,8 @@ def get_vocab(config: DataConfig):
     return vocab
 
 
-def pretrain_prep_batch(batch: list[np.array], vocab: Vocabulary, label_mask_token_id: int,
+def pretrain_prep_batch(batch: list[np.array], label_mask_token_id: int, pad_token_id: int, mask_token_id: int, vocab_ids: torch.Tensor,
                         mask_selection_prob: float, mask_mask_prob: float, mask_random_replace_prob: float):
-
-    pad_token_id = vocab.word_to_index[vocab.pad_token]
-    mask_token_id = vocab.word_to_index[vocab.mask_token]
 
     inputs = [torch.from_numpy(arr) for arr in batch]
     targets = [t.clone() for t in inputs]
@@ -137,7 +134,7 @@ def pretrain_prep_batch(batch: list[np.array], vocab: Vocabulary, label_mask_tok
         t[mask_indices] = torch.where(mask_away_mask, mask_token_id, t[mask_words])
         # from the selected words, randomly replace mask_random_replace_prob of them
         random_replace_mask = (rnd_nums >= mask_mask_prob) & (rnd_nums < mask_mask_prob + mask_random_replace_prob)
-        random_tokens = torch.randint(len(vocab.special_tokens), vocab.size(), (random_replace_mask.sum(),))
+        random_tokens = vocab_ids[torch.randint(0, len(vocab_ids), (random_replace_mask.sum(),))]
         t[mask_indices[random_replace_mask]] = random_tokens
 
         # make sure the label token is always masked away
@@ -148,22 +145,28 @@ def pretrain_prep_batch(batch: list[np.array], vocab: Vocabulary, label_mask_tok
     input_mask = ~(inputs == pad_token_id)
     return inputs, input_mask, targets
 
-def load_pretraining_data(config: DataConfig, vocab: Vocabulary):
+def load_pretraining_data(config: DataConfig, tokenizer):
 
     h5f = h5py.File(config.pretraining_h5_path, "r")
     training_ds = h5f["training"]
 
     validation_ds = h5f["validation"]
 
-    trainloader = DataLoader(training_ds, batch_size=config.pretraining_batch_size_train, shuffle=True, num_workers=2,
-                             collate_fn=lambda batch: pretrain_prep_batch(batch, vocab, 
-                                                                          vocab.word_to_index[config.pretraining_label_mask_token],
+    trainloader = DataLoader(training_ds[:10000], batch_size=config.pretraining_batch_size_train, shuffle=True, num_workers=0,
+                             collate_fn=lambda batch: pretrain_prep_batch(batch,
+                                                                          tokenizer.encode("<LABEL_MASK>")[1], # <s> tok <\s>
+                                                                          tokenizer.pad_token_id,
+                                                                          tokenizer.mask_token_id, 
+                                                                          torch.tensor(list(tokenizer.vocab.values())),
                                                                           config.pretraining_mask_selection_prob,
                                                                           config.pretraining_mask_mask_prob,
                                                                           config.pretraining_mask_random_selection_prob))
-    validloader = DataLoader(validation_ds, batch_size=config.pretraining_batch_size_eval, num_workers=2,
-                             collate_fn=lambda batch: pretrain_prep_batch(batch, vocab, 
-                                                                          vocab.word_to_index[config.pretraining_label_mask_token],
+    validloader = DataLoader(validation_ds[:10000], batch_size=config.pretraining_batch_size_eval, num_workers=0,
+                             collate_fn=lambda batch: pretrain_prep_batch(batch,
+                                                                          tokenizer.encode("<LABEL_MASK>")[1], # <s> tok <\s>
+                                                                          tokenizer.pad_token_id,
+                                                                          tokenizer.mask_token_id, 
+                                                                          torch.tensor(list(tokenizer.vocab.values())),
                                                                           config.pretraining_mask_selection_prob,
                                                                           config.pretraining_mask_mask_prob,
                                                                           config.pretraining_mask_random_selection_prob))

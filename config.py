@@ -58,11 +58,11 @@ class Config:
         eval_interval = 500,         # Evaluate the model every eval_interval steps
         save_interval = 10000,         # Save weights every save_interval steps
         save_weights = True,
-        save_weights_to = "./weights/pretrain_weights-<training_step>.pth", # <training_step> placeholder will be replaced
+        save_weights_to = "./weights/pretrain_weights-v2-<training_step>.pth", # <training_step> placeholder will be replaced
     )
     data_config = DataConfig(
         finetuning_h5_path = "data/finetuning_split_orig.h5",
-        pretraining_h5_path="data/sentiment140.h5",
+        pretraining_h5_path="data/sentiment140-v2.h5",
         pretraining_mask_selection_prob=0.1,
         pretraining_mask_mask_prob=0.8,
         pretraining_mask_random_selection_prob=0.1,

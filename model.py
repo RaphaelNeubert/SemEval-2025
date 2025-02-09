@@ -151,9 +151,9 @@ class SemEvalBertModel(nn.Module):
         return out
 
 class PretrainModel(nn.Module):
-    def __init__(self, vocab_size, config: ModelConfig):
+    def __init__(self, vocab_size, config: ModelConfig, pad_token_id=0):
         super().__init__()
-        self.embedding = nn.Embedding(vocab_size, config.dim_embeddings)
+        self.embedding = nn.Embedding(vocab_size, config.dim_embeddings, padding_idx=pad_token_id)
         self.positional_encoding = PositionalEncoding(config.dim_embeddings, config.max_seq_len, config.dropout)
         self.encoder = Encoder(config.dim_embeddings, config.num_heads, 
                                config.feed_forward_hidden_dims, config.num_encoder_layers, config.dropout)
