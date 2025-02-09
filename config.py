@@ -11,9 +11,9 @@ class Config:
     load_weights: bool = False
     load_weights_from: str = "./weights/weights-pre-fine-orig-973.pth"
 
-    load_pretrain_weights: bool = False
+    load_pretrain_weights: bool = True
     #load_pretrain_weights_from: str = "./weights/pretrain_weights-490000.pth"
-    load_pretrain_weights_from: str = "./weights/weights-pre-goemotion-3600.pth"
+    load_pretrain_weights_from: str = "./weights/pretrain_weights-v2.pth"
     device: str = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     #device: str = "cpu"
     #                           Anger     Fear      Joy      Sadness   Surprise

@@ -77,7 +77,7 @@ def model_freeze(model, unfreeze_count: int):
     unfroozen_params = []
     for p in model.parameters():
         p.requires_grad = False
-    for l in model.roberta.encoder.layer[-unfreeze_count:]:
+    for l in model.encoder.enc_layers[-unfreeze_count:]:
         for p in l.parameters():
             p.requires_grad = True
             unfroozen_params.append(p)

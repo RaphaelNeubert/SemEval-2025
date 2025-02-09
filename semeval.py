@@ -53,7 +53,8 @@ if __name__ == "__main__":
                     log_writer=writer, disable_tqdm=disable_tqdm)
 
     if args.finetune or args.interactive or args.submit or args.evaluate:
-        model = SemEvalBertModel(config.model_config).to(config.device)
+        #model = SemEvalBertModel(config.model_config).to(config.device)
+        model = SemEvalModel(len(tokenizer), config.model_config).to(config.device)
    #     #model = torch.compile(model)
         if config.load_weights:
             print("loading weights")
