@@ -41,3 +41,21 @@ To set up the environment, install the required Python packages using:
 * `scikit-learn` -> Only required for the submission evaluation script
 ```sh
 pip install torch numpy pandas scikit-learn transformers tqdm h5py
+```
+## Usage
+
+Below are the available command-line arguments and their functions:
+
+| Argument | Short Form | Description |
+|----------|-----------|-------------|
+| `--finetune` | `-f` | Fine-tune the model on the SemEval dataset. |
+| `--evaluate` | `-e` | Run evaluation on the finetuned model using the test dataset. |
+| `--submit` | `-s` | Generate predictions for submission. |
+| `--pretraining` | `-p` | Run pretraining before fine-tuning. |
+| `--log` | `-l` | Enable TensorBoard logging for tracking training progress. |
+| `--enable-tqdm` | `-t` | Enable TQDM progress bar during execution. |
+
+### Example Usage
+- **Fine-tune the model, enable tqdm progress bar as well as tensorboard logging:**  
+  ```sh
+  python semeval.py --ftl
