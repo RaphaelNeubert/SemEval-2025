@@ -19,20 +19,10 @@ class DataConfig:
     pretraining_mask_selection_prob: float = 0.1
     pretraining_mask_mask_prob: float = 0.8
     pretraining_mask_random_selection_prob: float = 0.1
-    load_vocab_from_disk: bool = False
-    vocab_path: str = "data/vocab.json"
-    vocab_generation_text_path: str = "data/books_large.txt"
-    vocab_generation_num_sentences: int = 10000000 # num of sentences that get randomly sampled for vocab generation
-    vocab_size: int = 30000
     pretraining_batch_size_train: int = 64
     pretraining_batch_size_eval: int = 64
     finetune_batch_size_train: int = 64
     finetune_batch_size_eval: int = 64
-    finetune_batch_size_test: int = 64
-    pretraining_mask_token: str = "<MASK>"
-    pretraining_label_mask_token: str ="<LABEL_MASK>"
-    pad_token: str = "<PAD>"
-    unk_token: str = "<UNK>"
 
 
 class Vocabulary:
