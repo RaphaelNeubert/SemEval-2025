@@ -7,14 +7,14 @@ import zipfile
 #pd.set_option('display.max_rows', 200)
 pd.set_option('display.max_columns', 300)
 
-def submit(model, vocab, label_set_thresholds):
+def submit(model, tokenizer, label_set_thresholds):
     model.eval()
     device = next(model.parameters()).device
     emotions = ["anger", "fear", "joy", "sadness", "surprise"]
     df = pd.read_csv("data/public_data_dev/track_a/dev/eng.csv")
     for i, sentence in enumerate(df["text"]):
-        sentence_processed = re.sub(r'([.,!?()"\'])', r' \1 ', sentence.lower()).split()
-        indices = torch.tensor(vocab.words_to_indices(sentence_processed), device=device).unsqueeze(0)
+        #sentence_processed = re.sub(r'([.,!?()"\'])', r' \1 ', sentence.lower()).split()
+        indices = torch.tensor(tokenizer.encode(sentence), device=device).unsqueeze(0)
         pred = torch.sigmoid(model(indices).squeeze())
         pred_classes = (pred > torch.tensor(label_set_thresholds, device=device)).to("cpu")
         for emo, label in zip(emotions, pred_classes):

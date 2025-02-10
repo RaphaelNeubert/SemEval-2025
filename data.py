@@ -19,19 +19,10 @@ class DataConfig:
     pretraining_mask_selection_prob: float = 0.1
     pretraining_mask_mask_prob: float = 0.8
     pretraining_mask_random_selection_prob: float = 0.1
-    load_vocab_from_disk: bool = False
-    vocab_path: str = "data/vocab.json"
-    vocab_generation_text_path: str = "data/books_large.txt"
-    vocab_generation_num_sentences: int = 10000000 # num of sentences that get randomly sampled for vocab generation
-    vocab_size: int = 30000
     pretraining_batch_size_train: int = 64
     pretraining_batch_size_eval: int = 64
     finetune_batch_size_train: int = 64
     finetune_batch_size_eval: int = 64
-    finetune_batch_size_test: int = 64
-    pretraining_mask_token: str = "<MASK>"
-    pad_token: str = "<PAD>"
-    unk_token: str = "<UNK>"
 
 
 class Vocabulary:
@@ -87,20 +78,21 @@ class Vocabulary:
             print(self.index_to_words(indices))
 
 
-def finetune_prep_batch(batch):
+def finetune_prep_batch(batch, padding_token_id: int):
     inputs = [torch.tensor(x["feature"]) for x in batch]
     targets = torch.tensor(np.array([x["label"] for x in batch]))
-    inputs_padded = pad_sequence(inputs, batch_first=True, padding_value=0)  # corresponds to <PAD>
-    mask = ~(inputs_padded == 0)
+    inputs_padded = pad_sequence(inputs, batch_first=True, padding_value=padding_token_id)  # corresponds to <PAD>
+    mask = ~(inputs_padded == padding_token_id)
     return inputs_padded, mask, targets
 
-def load_finetuning_data(config: DataConfig, vocab: Vocabulary):
+def load_finetuning_data(config: DataConfig, tokenizer):
     h5f = h5py.File(config.finetuning_h5_path, "r")
     training_ds = h5f["training"]
     validation_ds = h5f["validation"]
+    padding_token_id = tokenizer.pad_token_id
 
-    trainloader = DataLoader(training_ds, batch_size=config.finetune_batch_size_train, collate_fn=finetune_prep_batch, shuffle=True)
-    validloader = DataLoader(validation_ds, batch_size=config.finetune_batch_size_eval, collate_fn=finetune_prep_batch, shuffle=True)
+    trainloader = DataLoader(training_ds, batch_size=config.finetune_batch_size_train, collate_fn=lambda batch: finetune_prep_batch(batch, padding_token_id), shuffle=True)
+    validloader = DataLoader(validation_ds, batch_size=config.finetune_batch_size_eval, collate_fn=lambda batch: finetune_prep_batch(batch, padding_token_id), shuffle=True)
 
     return trainloader, validloader
 
@@ -117,11 +109,8 @@ def get_vocab(config: DataConfig):
     return vocab
 
 
-def pretrain_prep_batch(batch: list[np.array], vocab: Vocabulary,
+def pretrain_prep_batch(batch: list[np.array], label_mask_token_id: int, pad_token_id: int, mask_token_id: int, vocab_ids: torch.Tensor,
                         mask_selection_prob: float, mask_mask_prob: float, mask_random_replace_prob: float):
-
-    pad_token_id = vocab.word_to_index[vocab.pad_token]
-    mask_token_id = vocab.word_to_index[vocab.mask_token]
 
     inputs = [torch.from_numpy(arr) for arr in batch]
     targets = [t.clone() for t in inputs]
@@ -135,36 +124,41 @@ def pretrain_prep_batch(batch: list[np.array], vocab: Vocabulary,
         t[mask_indices] = torch.where(mask_away_mask, mask_token_id, t[mask_words])
         # from the selected words, randomly replace mask_random_replace_prob of them
         random_replace_mask = (rnd_nums >= mask_mask_prob) & (rnd_nums < mask_mask_prob + mask_random_replace_prob)
-        random_tokens = torch.randint(len(vocab.special_tokens), vocab.size(), (random_replace_mask.sum(),))
+        random_tokens = vocab_ids[torch.randint(0, len(vocab_ids), (random_replace_mask.sum(),))]
         t[mask_indices[random_replace_mask]] = random_tokens
+
+        # make sure the label token is always masked away
+        t[-1] = label_mask_token_id
 
     inputs = pad_sequence(inputs, batch_first=True, padding_value=pad_token_id)
     targets = pad_sequence(targets, batch_first=True, padding_value=pad_token_id)
     input_mask = ~(inputs == pad_token_id)
     return inputs, input_mask, targets
 
-def load_pretraining_data(config: DataConfig, vocab: Vocabulary):
+def load_pretraining_data(config: DataConfig, tokenizer):
 
     h5f = h5py.File(config.pretraining_h5_path, "r")
     training_ds = h5f["training"]
 
     validation_ds = h5f["validation"]
-    test_ds = h5f["test"]
 
-    trainloader = DataLoader(training_ds, batch_size=config.pretraining_batch_size_train, shuffle=True, num_workers=2,
-                             collate_fn=lambda batch: pretrain_prep_batch(batch, vocab, 
+    trainloader = DataLoader(training_ds, batch_size=config.pretraining_batch_size_train, shuffle=True, num_workers=0,
+                             collate_fn=lambda batch: pretrain_prep_batch(batch,
+                                                                          tokenizer.encode("<LABEL_MASK>")[1], # <s> tok <\s>
+                                                                          tokenizer.pad_token_id,
+                                                                          tokenizer.mask_token_id, 
+                                                                          torch.tensor(list(tokenizer.vocab.values())),
                                                                           config.pretraining_mask_selection_prob,
                                                                           config.pretraining_mask_mask_prob,
                                                                           config.pretraining_mask_random_selection_prob))
-    validloader = DataLoader(validation_ds, batch_size=config.pretraining_batch_size_eval, num_workers=2,
-                             collate_fn=lambda batch: pretrain_prep_batch(batch, vocab, 
+    validloader = DataLoader(validation_ds, batch_size=config.pretraining_batch_size_eval, num_workers=0,
+                             collate_fn=lambda batch: pretrain_prep_batch(batch,
+                                                                          tokenizer.encode("<LABEL_MASK>")[1], # <s> tok <\s>
+                                                                          tokenizer.pad_token_id,
+                                                                          tokenizer.mask_token_id, 
+                                                                          torch.tensor(list(tokenizer.vocab.values())),
                                                                           config.pretraining_mask_selection_prob,
                                                                           config.pretraining_mask_mask_prob,
                                                                           config.pretraining_mask_random_selection_prob))
-    testloader = DataLoader(test_ds, batch_size=config.pretraining_batch_size_eval, num_workers=2,
-                             collate_fn=lambda batch: pretrain_prep_batch(batch, vocab, 
-                                                                          config.pretraining_mask_selection_prob,
-                                                                          config.pretraining_mask_mask_prob,
-                                                                          config.pretraining_mask_random_selection_prob))
-    return trainloader, validloader, testloader
+    return trainloader, validloader
 

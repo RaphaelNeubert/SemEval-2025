@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from dataclasses import dataclass
+from transformers import RobertaModel
 
 
 @dataclass
@@ -23,8 +24,8 @@ class PositionalEncoding(nn.Module):
         div = torch.exp(-torch.arange(0, dim_embeddings, 2) / dim_embeddings * torch.log(torch.tensor(10000)))
 
         pos_enc = torch.zeros(max_len, dim_embeddings)
-        pos_enc[:, ::2] = torch.sin(pos.unsqueeze(-1)/div)
-        pos_enc[:, 1::2] = torch.cos(pos.unsqueeze(-1)/div)
+        pos_enc[:, ::2] = torch.sin(pos.unsqueeze(-1)*div)
+        pos_enc[:, 1::2] = torch.cos(pos.unsqueeze(-1)*div)
         # move automatically to specific device when module is moved
         self.register_buffer("pos_enc", pos_enc)
 
@@ -135,10 +136,24 @@ class SemEvalModel(nn.Module):
         out = self.fc(enc_out[:,0,:])
         return out
 
-class PretrainModel(nn.Module):
-    def __init__(self, vocab_size, config: ModelConfig):
+class SemEvalBertModel(nn.Module):
+    def __init__(self, config: ModelConfig):
         super().__init__()
-        self.embedding = nn.Embedding(vocab_size, config.dim_embeddings)
+        self.roberta = RobertaModel.from_pretrained("roberta-base")
+        self.dropout = nn.Dropout(config.dropout)
+        self.fc = nn.Linear(self.roberta.config.hidden_size, config.num_classes)
+
+    def forward(self, x, mask=None):
+        out = self.roberta(input_ids=x, attention_mask=mask)
+        out = out.last_hidden_state[:, 0, :]
+        out = self.dropout(out)
+        out = self.fc(out)
+        return out
+
+class PretrainModel(nn.Module):
+    def __init__(self, vocab_size, config: ModelConfig, pad_token_id=0):
+        super().__init__()
+        self.embedding = nn.Embedding(vocab_size, config.dim_embeddings, padding_idx=pad_token_id)
         self.positional_encoding = PositionalEncoding(config.dim_embeddings, config.max_seq_len, config.dropout)
         self.encoder = Encoder(config.dim_embeddings, config.num_heads, 
                                config.feed_forward_hidden_dims, config.num_encoder_layers, config.dropout)
