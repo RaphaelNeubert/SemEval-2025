@@ -21,7 +21,6 @@ def init_argparser():
 
     parser.add_argument("-t", "--enable-tqdm", action="store_true", help="Enable TQDM progress bar")
     parser.add_argument("-f", "--finetune", action="store_true", help="Finetune model")
-    parser.add_argument("-i", "--interactive", action="store_true", help="Run model queries interactively")
     parser.add_argument("-e", "--evaluate", action="store_true", help="Run finetune evaluation on the evaluation dataset")
     parser.add_argument("-s", "--submit", action="store_true", help="Run model to label submission file")
     parser.add_argument("-p", "--pretraining", action="store_true", help="Run pretraining")
@@ -42,7 +41,7 @@ if __name__ == "__main__":
 
     tokenizer = AutoTokenizer.from_pretrained("roberta-base")
 
-    if args.finetune or args.interactive or args.submit or args.evaluate:
+    if args.finetune or args.submit or args.evaluate:
         model = SemEvalBertModel(config.model_config).to(config.device)
    #     #model = torch.compile(model)
         if config.load_weights:
@@ -59,27 +58,9 @@ if __name__ == "__main__":
                    log_writer=writer, print_test_evals=True, tokenizer=tokenizer, disable_tqdm=disable_tqdm)
     if args.evaluate:
         _, validloader = load_finetuning_data(config.data_config, tokenizer)
-        #thresholds = [0.6, 0.3, 0.2, 0.4, 0.2]
-        #eval_loss, acc, precision, recall, f1 = finetune_evaluate(model, validloader, thresholds)
-        #print(f"Eval loss: {eval_loss:.4f}, F1: {f1:.4f}, Precision: {precision:.4f}, Recall: {recall:.4f}, Accuracy: {acc:.4f}")
-        import numpy as np
-        bests = []
-        for i in range(5):
-            f1_scores = []
-            values = np.arange(0.1, 1, 0.1)
-            #thresholds = [0.5]*5
-            thresholds = [0.7, 0.2, 0.7, 0.8, 0.3]
-            for x in values:
-                thresholds[i] = x
-                print("x: ", x)
-                eval_loss, acc, precision, recall, f1 = finetune_evaluate(model, validloader, thresholds)
-                print(f"Eval loss: {eval_loss:.4f}, F1: {f1:.4f}, Precision: {precision:.4f}, Recall: {recall:.4f}, Accuracy: {acc:.4f}")
-                f1_scores.append(f1)
-            bests.append(values[np.argmax(f1_scores)])
-        print(bests)
+        eval_loss, acc, precision, recall, f1 = finetune_evaluate(model, validloader, config.label_set_thresholds)
+        print(f"Eval loss: {eval_loss:.4f}, F1: {f1:.4f}, Precision: {precision:.4f}, Recall: {recall:.4f}, Accuracy: {acc:.4f}")
 
-    elif args.interactive:
-        interactive(model, vocab, config.label_set_thresholds)
     elif args.submit:
         submit(model, tokenizer, config.label_set_thresholds)
 
